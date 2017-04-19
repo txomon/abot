@@ -8,7 +8,6 @@ from typing import List
 
 import aiohttp
 from aiohttp import WSMsgType
-from aiohttp.client_ws import ClientWebSocketResponse
 from aiohttp.formdata import FormData
 from multidict import MultiDict
 
@@ -78,10 +77,10 @@ class SlackAPI:
             raise SlackCallException(f'No OK response returned', method=method)
         return response_body
 
-    async def slack_name_to_id(self, recipient):
+    def slack_name_to_id(self, recipient):
         if recipient.startswith('@'):
             username = recipient[1:]
-            users = [user for user in self.users if user['name'] == username and not user['deleted']]
+            users = [user for user in self.users if user['names'] == username and not user['deleted']]
             if len(users) > 1 or not users:
                 logger.error(f'User {username} does not exist')
                 raise SlackUseException(f'User {recipient} does not exist')
@@ -89,45 +88,45 @@ class SlackAPI:
         if recipient.startswith('#'):
             channel_name = recipient[1:]
             channels = [channel for channel in self.channels if
-                        channel['name'] == channel_name and not channel['archived']]
+                        channel['names'] == channel_name and not channel['archived']]
             if len(channels) > 1 or not channels:
                 logger.error(f'Channel {channel_name} does not exist')
                 raise SlackUseException(f'Channel {channel_name} does not exist')
             return channels[0]['id']
         return recipient
 
-    async def userids_to_channel(self, userids):
+    def userids_to_channel(self, userids):
         userids.sort()
         for mpim in self.mpims:
             if sorted(mpim['members']) == userids:
                 return mpim['id']
         raise SlackUseException(f'Channel with only {userids} does not exist')
 
-    async def ws_send(self, body: dict):
-        assert self.ws_socket and not self.ws_socket.closed(), 'Writing to someone is only supported through ws'
-        assert isinstance(self.ws_socket, ClientWebSocketResponse)
+    def ws_send(self, body: dict):
+        assert self.ws_socket and not self.ws_socket.closed, 'Writing to someone is only supported through ws'
         body['id'] = self.ws_ids
         self.ws_ids += 1
+        logger.debug(f'Sending {body}')
         self.ws_socket.send_json(body)
         future = self.response_futures[body['id']] = asyncio.Future()
         return future
 
-    async def write_to(self, recipients: List(str) or str, message: str):
-        if len(recipients) > 1:
+    def write_to(self, recipients: List[str] or str, message: str):
+        if not isinstance(recipients, str) and len(recipients) > 1:
             recipients_ids = [self.slack_name_to_id(recipient=recipient) for recipient in recipients]
             recipient = self.userids_to_channel(userids=recipients_ids)
         else:
-            recipient = recipients[0]
+            recipient = recipients
         if recipient[0] in '@#':  # User cannot be addressed directly, need to do it through DM channel
             recipient = self.slack_name_to_id(recipient=recipient)
         assert recipient[0] in 'CDG'
-        return await self.ws_send({
+        return self.ws_send({
             'type': 'message',
             'channel': recipient,
             'text': message,
         })
 
-    def handle_message(self, message):
+    def handle_message(self, ws_message):
         """
         Handle a message, processing it internally if required. If it's a message that should go outside the bot,
         this function will return True
@@ -135,26 +134,28 @@ class SlackAPI:
         :param message:
         :return: Boolean if message should be yielded
         """
+        message = json.loads(ws_message.data)
         if 'reply_to' not in message:
-            return True
+            return message
         reply_to = message['reply_to']
         future = self.response_futures.pop(reply_to, None)
         if future is None:
             logger.error(f'This should not happen, received reply to unknown message! {message}')
-        assert isinstance(future, asyncio.Future)
+            return None
         future.set_result(message)
-        return False
+        return None
 
     async def rtm_api_consume(self):
         response = await self.call('rtm.start', simple_latest=False, no_unreads=False, mpim_aware=True)
         async with self.session.ws_connect(url=response['url']) as self.ws_socket:
-            async for message in self.ws_socket:
-                if message.tp == WSMsgType.text:
-                    logger.debug('Received %s', message)
-                    if self.handle_message(message=message):
-                        yield json.loads(message)
-                elif message.tp in (WSMsgType.closed, WSMsgType.error):
-                    logger.debug('Finishing ws, %s', message)
+            async for ws_message in self.ws_socket:
+                if ws_message.tp == WSMsgType.text:
+                    logger.debug('Received %s', ws_message)
+                    message_content = self.handle_message(ws_message=ws_message)
+                    if message_content:
+                        yield message_content
+                elif ws_message.tp in (WSMsgType.closed, WSMsgType.error):
+                    logger.debug('Finishing ws, %s', ws_message)
                     if not self.ws_socket.closed:
                         await self.ws_socket.close()
                     break
