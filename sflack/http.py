@@ -8,6 +8,7 @@ from typing import List
 
 import aiohttp
 from aiohttp import WSMsgType
+from aiohttp.client_ws import ClientWebSocketResponse
 from aiohttp.formdata import FormData
 from multidict import MultiDict
 
@@ -41,8 +42,11 @@ class SlackAPI:
         self.bot_token = bot_token
         self.users = []
         self.channels = []
-        self.
+        self.mpims = []
+        self.ims = []
         self.ws_socket = None
+        self.ws_ids = 1
+        self.response_futures = {}
 
     async def request(self, method, url, data=None, headers=None):
         async with self.session.request(method=method, url=url, data=data, headers=headers) as response:
@@ -93,19 +97,53 @@ class SlackAPI:
         return recipient
 
     async def userids_to_channel(self, userids):
-        for user_id in userids:
-            pass
+        userids.sort()
+        for mpim in self.mpims:
+            if sorted(mpim['members']) == userids:
+                return mpim['id']
+        raise SlackUseException(f'Channel with only {userids} does not exist')
+
+    async def ws_send(self, body: dict):
+        assert self.ws_socket and not self.ws_socket.closed(), 'Writing to someone is only supported through ws'
+        assert isinstance(self.ws_socket, ClientWebSocketResponse)
+        body['id'] = self.ws_ids
+        self.ws_ids += 1
+        self.ws_socket.send_json(body)
+        future = self.response_futures[body['id']] = asyncio.Future()
+        return future
 
     async def write_to(self, recipients: List(str) or str, message: str):
         if len(recipients) > 1:
-            recipients_ids = []
-            for recipient in recipients:
-                recipients_ids.append(self.slack_name_to_id(recipient=recipient))
-            recipients_ids.sort()
+            recipients_ids = [self.slack_name_to_id(recipient=recipient) for recipient in recipients]
+            recipient = self.userids_to_channel(userids=recipients_ids)
         else:
             recipient = recipients[0]
-        if recipient.startswith('U'):  # User cannot be addressed directly, need to do it through DM channel
-            pass
+        if recipient[0] in '@#':  # User cannot be addressed directly, need to do it through DM channel
+            recipient = self.slack_name_to_id(recipient=recipient)
+        assert recipient[0] in 'CDG'
+        return await self.ws_send({
+            'type': 'message',
+            'channel': recipient,
+            'text': message,
+        })
+
+    def handle_message(self, message):
+        """
+        Handle a message, processing it internally if required. If it's a message that should go outside the bot,
+        this function will return True
+
+        :param message:
+        :return: Boolean if message should be yielded
+        """
+        if 'reply_to' not in message:
+            return True
+        reply_to = message['reply_to']
+        future = self.response_futures.pop(reply_to, None)
+        if future is None:
+            logger.error(f'This should not happen, received reply to unknown message! {message}')
+        assert isinstance(future, asyncio.Future)
+        future.set_result(message)
+        return False
 
     async def rtm_api_consume(self):
         response = await self.call('rtm.start', simple_latest=False, no_unreads=False, mpim_aware=True)
@@ -113,7 +151,8 @@ class SlackAPI:
             async for message in self.ws_socket:
                 if message.tp == WSMsgType.text:
                     logger.debug('Received %s', message)
-                    yield json.loads(message)
+                    if self.handle_message(message=message):
+                        yield json.loads(message)
                 elif message.tp in (WSMsgType.closed, WSMsgType.error):
                     logger.debug('Finishing ws, %s', message)
                     if not self.ws_socket.closed:
