@@ -49,8 +49,6 @@ class SlackAPI:
         'team_plan_change', 'team_pref_change', 'team_profile_change', 'team_profile_delete', 'team_profile_reorder',
         'team_rename', 'url_verification', 'user_change', 'user_typing',)
 
-    RTM_EVENT_HANDLERS = {}
-
     def __init__(self, bot_token, event_loop=None):
         self.loop = event_loop or asyncio.get_event_loop()
         self.session = aiohttp.ClientSession(loop=self.loop)
@@ -143,108 +141,128 @@ class SlackAPI:
             'text': message,
         })
 
-    def handle_bot(self, message):
-        bot_id = message['bot']['id']
-        for bot in self.bots:
-            if bot['id'] == bot_id:
+    def look_for_id(self, iterable, object_id):
+        for item in iterable:
+            if item['id'] == object_id:
                 break
         else:
-            bot = None
+            item = None
+        return item
 
-        message_type = message['type']
+    def handle_bot_added(self, message):
+        bot_id = message['bot']['id']
+        bot = self.look_for_id(self.bots, bot_id)
         if bot:
-            if message_type == 'bot_added':
-                logger.warning(f'Bot {bot_id} is to be added, but already exists, updating')
-            elif message_type == 'bot_changed':
-                logger.debug(f'Bot {bot_id} changed')
+            logger.warning(f'Bot {bot_id} is to be added, but already exists, updating')
             bot.update(message['bot'])
         else:
-            if message_type == 'bot_added':
-                logger.debug(f'Adding bot {bot_id}')
-            elif message_type == 'bot_changed':
-                logger.warning(f'Bot {bot_id} is to be changed, but does not exist, adding')
+            logger.debug(f'Adding bot {bot_id}')
             bot = {'deleted': False, 'updated': 0}
             bot.update(message['bot'])
             self.bots.append(bot)
         return message
 
-    RTM_EVENT_HANDLERS[handle_bot] = ('bot_added', 'bot_changed')
+    def handle_bot_changed(self, message):
+        bot_id = message['bot']['id']
+        bot = self.look_for_id(self.bots, bot_id)
 
-    def handle_channel(self, message):
-        message_type = message['type']
-        if message_type in ('channel_archive', 'channel_deleted', 'channel_marked'):
-            channel_id = message['channel']
-        elif message_type in ('channel_created', 'channel_joined', 'channel_rename'):
-            channel_id = message['channel']['id']
-        elif message_type in ('channel_history_change',):
-            channel_id = None
+        if bot:
+            logger.debug(f'Bot {bot_id} changed')
+            bot.update(message['bot'])
         else:
-            logger.error(f'Channel handler not prepared for {message}')
-            return message
-
-        for channel in self.channels:
-            if channel['id'] == channel_id:
-                break
-        else:
-            channel = None
-
-        if channel:
-            if message_type == 'channel_archive':
-                logger.debug(f'Bot {channel_id} has been archived. {message}')
-                channel['is_archived'] = True
-            elif message_type == 'channel_created':
-                logger.warning(f'Channel {channel_id} already exists, updating')
-                channel.update(message['channel'])
-            elif message_type == 'channel_deleted':
-                logger.debug(f'Channel {channel_id} deleted.')
-                self.channels.remove(channel)
-            elif message_type == 'channel_joined':
-                logger.debug(f'Channel {channel_id} joined')
-                channel.update(message['channel'])
-            elif message_type == 'channel_left':
-                logger.debug(f'Left channel {channel_id}')
-                channel['is_member'] = False
-            elif message_type == 'channel_marked':
-                logger.debug(f'Channel mark event for {channel_id}, doing nothing')
-            elif message_type == 'channel_rename':
-                logger.debug(f'Channel {channel_id} renamed')
-                channel.update(message['channel'])
-        else:
-            if message_type == 'channel_archive':
-                logger.warning(f'Channel {channel_id} is not in the list of known channels, adding')
-                self.channels.append({'id': channel_id, 'is_archived': True, "is_channel": True, })
-            elif message_type == 'channel_created':
-                logger.debug(f'Channel {channel_id} has been created. {message["channel"]}')
-                self.channels.append(dict(is_archived=False, is_channel=True, **message['channel']))
-            elif message_type == 'channel_deleted':
-                logger.warning(f'Channel {channel_id} not found in list. Doing nothing')
-            elif message_type == 'channel_joined':
-                logger.warning(f'Joined previously unknown channel {channel_id}')
-                self.channels.append(message['channel'])
-            elif message_type == 'channel_left':
-                logger.warning(f'Left previously unknown channel {channel_id}')
-                self.channels.append(dict(id=channel_id, is_channel=True, ))
-            elif message_type == 'channel_marked':
-                logger.warning(f'Mark on previously unknown channel {channel_id}')
-                self.channels.append(dict(id=channel_id, is_channel=True, ))
-            elif message_type == 'channel_rename':
-                logger.warning(f'Rename of previously unknown channel {channel_id}')
-                self.channels.append(dict(is_channel=True, **message['channel']))
+            logger.warning(f'Bot {bot_id} is to be changed, but does not exist, adding')
+            bot = {'deleted': False, 'updated': 0}
+            bot.update(message['bot'])
+            self.bots.append(bot)
         return message
 
-    RTM_EVENT_HANDLERS[handle_bot] = (
-        'channel_archive', 'channel_created', 'channel_deleted', 'channel_history_changed', 'channel_joined',
-        'channel_left', 'channel_marked', 'channel_rename'
-    )
-
-    def handle_presence(self, message):
-        user_id = message['user']
-        for user in self.users:
-            if user['id'] == user_id:
-                break
+    def handle_channel_archive(self, message):
+        channel_id = message['channel']
+        channel = self.look_for_id(self.channels, channel_id)
+        if channel:
+            logger.debug(f'Bot {channel_id} has been archived. {message}')
+            channel['is_archived'] = True
         else:
-            user = None
+            logger.warning(f'Channel {channel_id} is not in the list of known channels, adding')
+            self.channels.append({'id': channel_id, 'is_archived': True, "is_channel": True, })
+        return message
 
+    def handle_channel_created(self, message):
+        channel_id = message['channel']['id']
+        channel = self.look_for_id(self.channels, channel_id)
+        if channel:
+            logger.warning(f'Channel {channel_id} already exists, updating')
+            channel.update(message['channel'])
+        else:
+            logger.debug(f'Channel {channel_id} has been created. {message["channel"]}')
+            self.channels.append(dict(is_archived=False, is_channel=True, **message['channel']))
+        return message
+
+    def handle_channel_deleted(self, message):
+        channel_id = message['channel']
+        channel = self.look_for_id(self.channels, channel_id)
+        if channel:
+            logger.warning(f'Channel {channel_id} already exists, updating')
+            channel.update(message['channel'])
+        else:
+            logger.debug(f'Channel {channel_id} has been created. {message["channel"]}')
+            self.channels.append(dict(is_archived=False, is_channel=True, **message['channel']))
+        return message
+
+    def handle_channel_history_changed(self, message):
+        logger.debug(f'Channel history changed. Doing nothing')
+        return message
+
+    def handle_channel_joined(self, message):
+        channel_id = message['channel']['id']
+        channel = self.look_for_id(self.channels, channel_id)
+        if channel:
+            logger.debug(f'Channel {channel_id} joined')
+            channel.update(message['channel'])
+        else:
+            logger.warning(f'Joined previously unknown channel {channel_id}')
+            self.channels.append(message['channel'])
+        return message
+
+    def handle_channel_left(self, message):
+        channel_id = message['channel']
+        channel = self.look_for_id(self.channels, channel_id)
+        if channel:
+            logger.debug(f'Left channel {channel_id}')
+            channel['is_member'] = False
+        else:
+            logger.warning(f'Left previously unknown channel {channel_id}')
+            self.channels.append(dict(id=channel_id, is_channel=True, ))
+        return message
+
+    def handle_channel_marked(self, message):
+        channel_id = message['channel']
+        channel = self.look_for_id(self.channels, channel_id)
+        if channel:
+            logger.debug(f'Channel mark event for {channel_id}, doing nothing')
+        else:
+            logger.warning(f'Mark on previously unknown channel {channel_id}')
+            self.channels.append(dict(id=channel_id, is_channel=True, ))
+        return message
+
+    def handle_channel_rename(self, message):
+        channel_id = message['channel']['id']
+        channel = self.look_for_id(self.channels, channel_id)
+        if channel:
+            logger.debug(f'Channel {channel_id} renamed')
+            channel.update(message['channel'])
+        else:
+            logger.warning(f'Rename of previously unknown channel {channel_id}')
+            self.channels.append(dict(is_channel=True, **message['channel']))
+        return message
+
+    def handle_hello(self, message):
+        logger.info('Correctly connected to RTM stream')
+        return message
+
+    def handle_presence_change(self, message):
+        user_id = message['user']
+        user = self.look_for_id(self.users, user_id)
         presence = message["presence"]
         if user:
             logger.debug(f'User {user_id} presence updated to {presence}')
@@ -254,21 +272,11 @@ class SlackAPI:
             self.users.append(dict(id=user_id, presence=presence))
         return message
 
-    RTM_EVENT_HANDLERS[handle_presence] = ('presence_change',)
-
-    def handle_hello(self, message):
-        logger.info('Correctly connected to RTM stream')
-        return message
-
-    RTM_EVENT_HANDLERS[handle_hello] = ('hello',)
-
-    def handle_reconnect(self, message):
+    def handle_reconnect_url(self, message):
         logger.debug('Slack says that reconnect_url is experimental, doing nothing')
         return None
 
-    RTM_EVENT_HANDLERS[handle_reconnect] = ('reconnect_url',)
-
-    def handle_message(self, ws_message):
+    def rtm_handler(self, ws_message):
         """
         Handle a message, processing it internally if required. If it's a message that should go outside the bot,
         this function will return True
@@ -290,10 +298,9 @@ class SlackAPI:
             return
         message_type = message['type']
 
-        for handler, event_types in self.RTM_EVENT_HANDLERS.items():
-            if message_type in event_types:
-                # Handlers are not properties when added to RTM_EVENT_HANDLERS, just functions
-                return handler(self, message)
+        if hasattr(self, f'handle_{message_type}'):
+            function = getattr(self, f'handle_{message_type}')
+            return function(message)
 
         if message_type in self.SLACK_RTM_EVENTS:
             logger.debug(f'Received {message_type} but unhandled. {message}')
@@ -311,7 +318,7 @@ class SlackAPI:
         async with self.session.ws_connect(url=response['url']) as self.ws_socket:
             async for ws_message in self.ws_socket:
                 if ws_message.tp == WSMsgType.text:
-                    message_content = self.handle_message(ws_message=ws_message)
+                    message_content = self.rtm_handler(ws_message=ws_message)
                     if message_content:
                         yield message_content
                 elif ws_message.tp in (WSMsgType.closed, WSMsgType.error):
@@ -322,3 +329,9 @@ class SlackAPI:
 
     def __del__(self):
         asyncio.ensure_future(self.session.close(), loop=self.loop)
+
+
+for method in dir(SlackAPI):
+    if method.startswith('handle_'):
+        handle, event_name = method.split('_', 1)
+        assert event_name in SlackAPI.SLACK_RTM_EVENTS, f'SlackAPI defines unregistered handler {method}'
