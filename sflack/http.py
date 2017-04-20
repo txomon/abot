@@ -34,6 +34,22 @@ class SlackUseException(SlackException):
 
 class SlackAPI:
     SLACK_RPC_PREFIX = 'https://slack.com/api/'
+    SLACK_RTM_EVENTS = (
+        'accounts_changed', 'bot_added', 'bot_changed', 'channel_archive', 'channel_created', 'channel_deleted',
+        'channel_history_changed', 'channel_joined', 'channel_left', 'channel_marked', 'channel_rename',
+        'channel_unarchive', 'commands_changed', 'dnd_updated', 'dnd_updated_user', 'email_domain_changed',
+        'emoji_changed', 'file_change', 'file_comment_added', 'file_comment_deleted', 'file_comment_edited',
+        'file_created', 'file_deleted', 'file_public', 'file_shared', 'file_unshared', 'goodbye', 'group_archive',
+        'group_close', 'group_history_changed', 'group_joined', 'group_left', 'group_marked', 'group_open',
+        'group_rename', 'group_unarchive', 'hello', 'im_close', 'im_created', 'im_history_changed', 'im_marked',
+        'im_open', 'link_shared', 'manual_presence_change', 'message', 'message.channels', 'message.groups',
+        'message.im', 'message.mpim', 'pin_added', 'pin_removed', 'pref_change', 'presence_change', 'reaction_added',
+        'reaction_removed', 'reconnect_url', 'star_added', 'star_removed', 'subteam_created', 'subteam_self_added',
+        'subteam_self_removed', 'subteam_updated', 'team_domain_change', 'team_join', 'team_migration_started',
+        'team_plan_change', 'team_pref_change', 'team_profile_change', 'team_profile_delete', 'team_profile_reorder',
+        'team_rename', 'url_verification', 'user_change', 'user_typing',)
+
+    RTM_EVENT_HANDLERS = {}
 
     def __init__(self, bot_token, event_loop=None):
         self.loop = event_loop or asyncio.get_event_loop()
@@ -152,6 +168,8 @@ class SlackAPI:
             self.bots.append(bot)
         return message
 
+    RTM_EVENT_HANDLERS[handle_bot] = ('bot_added', 'bot_changed')
+
     def handle_channel(self, message):
         message_type = message['type']
         if message_type in ('channel_archive', 'channel_deleted', 'channel_marked'):
@@ -214,6 +232,11 @@ class SlackAPI:
                 self.channels.append(dict(is_channel=True, **message['channel']))
         return message
 
+    RTM_EVENT_HANDLERS[handle_bot] = (
+        'channel_archive', 'channel_created', 'channel_deleted', 'channel_history_changed', 'channel_joined',
+        'channel_left', 'channel_marked', 'channel_rename'
+    )
+
     def handle_presence(self, message):
         user_id = message['user']
         for user in self.users:
@@ -230,6 +253,20 @@ class SlackAPI:
             logger.warning(f'Setting presence for previously unknown user {user_id}')
             self.users.append(dict(id=user_id, presence=presence))
         return message
+
+    RTM_EVENT_HANDLERS[handle_presence] = ('presence_change',)
+
+    def handle_hello(self, message):
+        logger.info('Correctly connected to RTM stream')
+        return message
+
+    RTM_EVENT_HANDLERS[handle_hello] = ('hello',)
+
+    def handle_reconnect(self, message):
+        logger.debug('Slack says that reconnect_url is experimental, doing nothing')
+        return None
+
+    RTM_EVENT_HANDLERS[handle_reconnect] = ('reconnect_url',)
 
     def handle_message(self, ws_message):
         """
@@ -252,87 +289,16 @@ class SlackAPI:
             logger.error(f'No idea what this could be {message}')
             return
         message_type = message['type']
-        if message_type in (
-                'accounts_changed',
-                'channel_unarchive',
-                'commands_changed',
-                'dnd_updated',
-                'dnd_updated_user',
-                'email_domain_changed',
-                'emoji_changed',
-                'file_change',
-                'file_comment_added',
-                'file_comment_deleted',
-                'file_comment_edited',
-                'file_created',
-                'file_deleted',
-                'file_public',
-                'file_shared',
-                'file_unshared',
-                'goodbye',
-                'group_archive',
-                'group_close',
-                'group_history_changed',
-                'group_joined',
-                'group_left',
-                'group_marked',
-                'group_open',
-                'group_rename',
-                'group_unarchive',
-                'im_close',
-                'im_created',
-                'im_history_changed',
-                'im_marked',
-                'im_open',
-                'link_shared',
-                'manual_presence_change',
-                'message',
-                'message.channels',
-                'message.groups',
-                'message.im',
-                'message.mpim',
-                'pin_added',
-                'pin_removed',
-                'pref_change',
-                'reaction_added',
-                'reaction_removed',
-                'star_added',
-                'star_removed',
-                'subteam_created',
-                'subteam_self_added',
-                'subteam_self_removed',
-                'subteam_updated',
-                'team_domain_change',
-                'team_join',
-                'team_migration_started',
-                'team_plan_change',
-                'team_pref_change',
-                'team_profile_change',
-                'team_profile_delete',
-                'team_profile_reorder',
-                'team_rename',
-                'url_verification',
-                'user_change',
-                'user_typing',
-        ):
+
+        for handler, event_types in self.RTM_EVENT_HANDLERS.items():
+            if message_type in event_types:
+                # Handlers are not properties when added to RTM_EVENT_HANDLERS, just functions
+                return handler(self, message)
+
+        if message_type in self.SLACK_RTM_EVENTS:
             logger.debug(f'Received {message_type} but unhandled. {message}')
-            # We don't return to be able to spot handled messages
-
-        if message_type == 'hello':
-            logger.info('Correctly connected to RTM stream')
-            return message
-        if message_type == 'presence_change':
-            return self.handle_presence(message=message)
-        if message_type in ('bot_added', 'bot_changed'):
-            return self.handle_bot(message=message)
-        if message_type in ('channel_archive', 'channel_created', 'channel_deleted', 'channel_history_changed',
-                            'channel_joined', 'channel_left', 'channel_marked', 'channel_rename'):
-            return self.handle_channel(message=message)
-        if message_type in ('reconnect_url',):
-            logger.debug('Slack says that reconnect_url is experimental')
-            return None
-
-        logger.warning(f'Event {message_type} does not exist. {message}')
+        else:
+            logger.warning(f'Event {message_type} does not exist. {message}')
         return message
 
     async def rtm_api_consume(self):
