@@ -250,8 +250,74 @@ class SlackAPI:
             return None
         if 'type' not in message:
             logger.error(f'No idea what this could be {message}')
-            return None
+            return
         message_type = message['type']
+        if message_type in (
+                'accounts_changed',
+                'channel_unarchive',
+                'commands_changed',
+                'dnd_updated',
+                'dnd_updated_user',
+                'email_domain_changed',
+                'emoji_changed',
+                'file_change',
+                'file_comment_added',
+                'file_comment_deleted',
+                'file_comment_edited',
+                'file_created',
+                'file_deleted',
+                'file_public',
+                'file_shared',
+                'file_unshared',
+                'goodbye',
+                'group_archive',
+                'group_close',
+                'group_history_changed',
+                'group_joined',
+                'group_left',
+                'group_marked',
+                'group_open',
+                'group_rename',
+                'group_unarchive',
+                'im_close',
+                'im_created',
+                'im_history_changed',
+                'im_marked',
+                'im_open',
+                'link_shared',
+                'manual_presence_change',
+                'message',
+                'message.channels',
+                'message.groups',
+                'message.im',
+                'message.mpim',
+                'pin_added',
+                'pin_removed',
+                'pref_change',
+                'reaction_added',
+                'reaction_removed',
+                'star_added',
+                'star_removed',
+                'subteam_created',
+                'subteam_self_added',
+                'subteam_self_removed',
+                'subteam_updated',
+                'team_domain_change',
+                'team_join',
+                'team_migration_started',
+                'team_plan_change',
+                'team_pref_change',
+                'team_profile_change',
+                'team_profile_delete',
+                'team_profile_reorder',
+                'team_rename',
+                'url_verification',
+                'user_change',
+                'user_typing',
+        ):
+            logger.debug(f'Received {message_type} but unhandled. {message}')
+            # We don't return to be able to spot handled messages
+
         if message_type == 'hello':
             logger.info('Correctly connected to RTM stream')
             return message
@@ -259,15 +325,14 @@ class SlackAPI:
             return self.handle_presence(message=message)
         if message_type in ('bot_added', 'bot_changed'):
             return self.handle_bot(message=message)
-        if message_type in ('channel_archive', 'channel_created', 'channel_deleted', 'channel_joined', 'channel_left',
-                            'channel_marked', 'channel_rename'):
+        if message_type in ('channel_archive', 'channel_created', 'channel_deleted', 'channel_history_changed',
+                            'channel_joined', 'channel_left', 'channel_marked', 'channel_rename'):
             return self.handle_channel(message=message)
         if message_type in ('reconnect_url',):
             logger.debug('Slack says that reconnect_url is experimental')
             return None
 
-        logger.info(f'Event {message_type} is not handled. {message}')
-
+        logger.warning(f'Event {message_type} does not exist. {message}')
         return message
 
     async def rtm_api_consume(self):
