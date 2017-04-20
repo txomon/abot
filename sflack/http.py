@@ -43,6 +43,7 @@ class SlackAPI:
         self.channels = []
         self.mpims = []
         self.ims = []
+        self.bots = []
         self.ws_socket = None
         self.ws_ids = 1
         self.response_futures = {}
@@ -126,6 +127,110 @@ class SlackAPI:
             'text': message,
         })
 
+    def handle_bot(self, message):
+        bot_id = message['bot']['id']
+        for bot in self.bots:
+            if bot['id'] == bot_id:
+                break
+        else:
+            bot = None
+
+        message_type = message['type']
+        if bot:
+            if message_type == 'bot_added':
+                logger.warning(f'Bot {bot_id} is to be added, but already exists, updating')
+            elif message_type == 'bot_changed':
+                logger.debug(f'Bot {bot_id} changed')
+            bot.update(message['bot'])
+        else:
+            if message_type == 'bot_added':
+                logger.debug(f'Adding bot {bot_id}')
+            elif message_type == 'bot_changed':
+                logger.warning(f'Bot {bot_id} is to be changed, but does not exist, adding')
+            bot = {'deleted': False, 'updated': 0}
+            bot.update(message['bot'])
+            self.bots.append(bot)
+        return message
+
+    def handle_channel(self, message):
+        message_type = message['type']
+        if message_type in ('channel_archive', 'channel_deleted', 'channel_marked'):
+            channel_id = message['channel']
+        elif message_type in ('channel_created', 'channel_joined', 'channel_rename'):
+            channel_id = message['channel']['id']
+        elif message_type in ('channel_history_change',):
+            channel_id = None
+        else:
+            logger.error(f'Channel handler not prepared for {message}')
+            return message
+
+        for channel in self.channels:
+            if channel['id'] == channel_id:
+                break
+        else:
+            channel = None
+
+        if channel:
+            if message_type == 'channel_archive':
+                logger.debug(f'Bot {channel_id} has been archived. {message}')
+                channel['is_archived'] = True
+            elif message_type == 'channel_created':
+                logger.warning(f'Channel {channel_id} already exists, updating')
+                channel.update(message['channel'])
+            elif message_type == 'channel_deleted':
+                logger.debug(f'Channel {channel_id} deleted.')
+                self.channels.remove(channel)
+            elif message_type == 'channel_joined':
+                logger.debug(f'Channel {channel_id} joined')
+                channel.update(message['channel'])
+            elif message_type == 'channel_left':
+                logger.debug(f'Left channel {channel_id}')
+                channel['is_member'] = False
+            elif message_type == 'channel_marked':
+                logger.debug(f'Channel mark event for {channel_id}, doing nothing')
+            elif message_type == 'channel_rename':
+                logger.debug(f'Channel {channel_id} renamed')
+                channel.update(message['channel'])
+        else:
+            if message_type == 'channel_archive':
+                logger.warning(f'Channel {channel_id} is not in the list of known channels, adding')
+                self.channels.append({'id': channel_id, 'is_archived': True, "is_channel": True, })
+            elif message_type == 'channel_created':
+                logger.debug(f'Channel {channel_id} has been created. {message["channel"]}')
+                self.channels.append(dict(is_archived=False, is_channel=True, **message['channel']))
+            elif message_type == 'channel_deleted':
+                logger.warning(f'Channel {channel_id} not found in list. Doing nothing')
+            elif message_type == 'channel_joined':
+                logger.warning(f'Joined previously unknown channel {channel_id}')
+                self.channels.append(message['channel'])
+            elif message_type == 'channel_left':
+                logger.warning(f'Left previously unknown channel {channel_id}')
+                self.channels.append(dict(id=channel_id, is_channel=True, ))
+            elif message_type == 'channel_marked':
+                logger.warning(f'Mark on previously unknown channel {channel_id}')
+                self.channels.append(dict(id=channel_id, is_channel=True, ))
+            elif message_type == 'channel_rename':
+                logger.warning(f'Rename of previously unknown channel {channel_id}')
+                self.channels.append(dict(is_channel=True, **message['channel']))
+        return message
+
+    def handle_presence(self, message):
+        user_id = message['user']
+        for user in self.users:
+            if user['id'] == user_id:
+                break
+        else:
+            user = None
+
+        presence = message["presence"]
+        if user:
+            logger.debug(f'User {user_id} presence updated to {presence}')
+            user['presence'] = presence
+        else:
+            logger.warning(f'Setting presence for previously unknown user {user_id}')
+            self.users.append(dict(id=user_id, presence=presence))
+        return message
+
     def handle_message(self, ws_message):
         """
         Handle a message, processing it internally if required. If it's a message that should go outside the bot,
@@ -135,27 +240,51 @@ class SlackAPI:
         :return: Boolean if message should be yielded
         """
         message = json.loads(ws_message.data)
-        if 'reply_to' not in message:
-            return message
-        reply_to = message['reply_to']
-        future = self.response_futures.pop(reply_to, None)
-        if future is None:
-            logger.error(f'This should not happen, received reply to unknown message! {message}')
+        if 'reply_to' in message:
+            reply_to = message['reply_to']
+            future = self.response_futures.pop(reply_to, None)
+            if future is None:
+                logger.error(f'This should not happen, received reply to unknown message! {message}')
+                return None
+            future.set_result(message)
             return None
-        future.set_result(message)
-        return None
+        if 'type' not in message:
+            logger.error(f'No idea what this could be {message}')
+            return None
+        message_type = message['type']
+        if message_type == 'hello':
+            logger.info('Correctly connected to RTM stream')
+            return message
+        if message_type == 'presence_change':
+            return self.handle_presence(message=message)
+        if message_type in ('bot_added', 'bot_changed'):
+            return self.handle_bot(message=message)
+        if message_type in ('channel_archive', 'channel_created', 'channel_deleted', 'channel_joined', 'channel_left',
+                            'channel_marked', 'channel_rename'):
+            return self.handle_channel(message=message)
+        if message_type in ('reconnect_url',):
+            logger.debug('Slack says that reconnect_url is experimental')
+            return None
+
+        logger.info(f'Event {message_type} is not handled. {message}')
+
+        return message
 
     async def rtm_api_consume(self):
         response = await self.call('rtm.start', simple_latest=False, no_unreads=False, mpim_aware=True)
+        self.channels = response['channels']
+        self.ims = response['ims']
+        self.mpims = response['mpims']
+        self.users = response['users']
+        self.bots = response['bots']
         async with self.session.ws_connect(url=response['url']) as self.ws_socket:
             async for ws_message in self.ws_socket:
                 if ws_message.tp == WSMsgType.text:
-                    logger.debug('Received %s', ws_message)
                     message_content = self.handle_message(ws_message=ws_message)
                     if message_content:
                         yield message_content
                 elif ws_message.tp in (WSMsgType.closed, WSMsgType.error):
-                    logger.debug('Finishing ws, %s', ws_message)
+                    logger.info('Finishing ws, %s', ws_message)
                     if not self.ws_socket.closed:
                         await self.ws_socket.close()
                     break

@@ -45,15 +45,14 @@ class Bot:
             return
         for expression, function in self.commands.items():
             if match(expression=expression, message=text):
-                await function(event)
+                asyncio.ensure_future(function(event))
         else:
             logger.error('No matching')
 
     async def _handle_event(self, event):
-        if event.type == 'message':
-            await self._handle_message(event)
-        else:
-            logger.info(f'Unhandled event {event}')
+        if event.type != 'message':
+            return
+        await self._handle_message(event)
 
     async def run_forever(self):
         async for event in self.slack_api.rtm_api_consume():
