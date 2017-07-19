@@ -190,6 +190,9 @@ class SlackAPI:
         logger.debug(f'Ignoring {message["type"]} message. {message}')
         return message
 
+    def get_user_by_id(self, user_id):
+        return self.look_for_id(self.users, user_id)
+
     handle_accounts_changed = ignore_message
 
     def handle_bot_added(self, message):

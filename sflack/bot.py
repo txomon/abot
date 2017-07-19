@@ -40,13 +40,21 @@ class Event(dict):
 
 
 class MessageEvent(Event):
-    async def say(self, text):
+    async def say(self, text: str, to: str = None):
         # Say something in the same channel as the message
-        await self.bot.slack_api.write_to(self.channel, text)
+        if to is None:
+            to = self.channel
+        await self.bot.slack_api.write_to(to, text)
 
-    async def tell(self, text):
+    async def tell(self, text: str, to: str = None):
+        if to is None:
+            to = self.user
         # Say something to the sender
-        await self.bot.slack_api.write_to(self.user, text)
+        await self.bot.slack_api.write_to(to, text)
+
+    @property
+    def sender(self):
+        return self.bot.slack_api.get_user_by_id(self.user)
 
 
 class Bot:
