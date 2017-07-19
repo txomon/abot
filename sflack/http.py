@@ -161,8 +161,6 @@ class SlackAPI:
             recipient = recipients
         if recipient[0] in '@#U':  # User cannot be addressed directly, need to do it through DM channel
             recipient = await self.slack_name_to_id(recipient=recipient)
-        import ipdb
-        ipdb.set_trace()
         assert recipient[0] in 'CDG', f'Programming error, receiver should start with (C|D|G) ({recipient}'
         return self.ws_send({
             'type': 'message',
@@ -546,11 +544,7 @@ class SlackAPI:
 
     handle_reaction_added = ignore_message
     handle_reaction_removed = ignore_message
-
-    def handle_reconnect_url(self, message):
-        logger.debug('Slack says that reconnect_url is experimental, doing nothing')
-        return None
-
+    handle_reconnect_url = ignore_message
     handle_star_added = ignore_message
     handle_star_removed = ignore_message
     handle_subteam_created = ignore_message
@@ -634,6 +628,7 @@ class SlackAPI:
         self.mpims = response['mpims']
         self.users = response['users']
         self.bots = response['bots']
+        logger.debug(f'Connect url {response["url"]}')
         async with self.session.ws_connect(url=response['url']) as self.ws_socket:
             async for ws_message in self.ws_socket:
                 if ws_message.tp == WSMsgType.text:
@@ -648,6 +643,7 @@ class SlackAPI:
 
     def __del__(self):
         asyncio.ensure_future(self.session.close(), loop=self.loop)
+        self.session.close()
 
 
 for method in dir(SlackAPI):

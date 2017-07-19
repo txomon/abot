@@ -76,22 +76,23 @@ class Bot:
         self.add_message_handler(expression, f)
 
     def add_message_handler(self, rexpression, func):
-        regex_expression = re.compile(rexpression)
-        self.commands[regex_expression] = func
+        self.commands[rexpression] = func
 
-    async def _handle_message(self, event):
+    async def _handle_message(self, event: MessageEvent):
         already_matched = False
         for expression, function in self.commands.items():
             expression = expression.format(**self.expression_values)
             if not match(expression=expression, message=event.text):
-                logger.debug(f'{event.text} didn\'t match {expression}')
+                logger.debug(f'Text `{event.text}` didn\'t match `{expression}`')
                 continue
             if already_matched:
                 logger.warning(f'Skipping already executed {event} (Would have been {function})')
                 continue
             already_matched = True
             logger.debug(f'Executing {event} in {function}')
-            asyncio.ensure_future(function(event))
+            asyncio.ensure_future(
+                self.run_event(function=function, event=event)
+            )
         else:
             logger.debug(f'No matching {event}')
 
@@ -103,9 +104,28 @@ class Bot:
         await self._handle_message(MessageEvent.from_event(event=event))
 
     async def run_forever(self):
-        async for event in self.slack_api.rtm_api_consume():
-            ev = Event.from_dict(event, bot=self)
-            await self._handle_event(event=ev)
+        continue_running = True
+        while continue_running:
+            try:
+                async for event in self.slack_api.rtm_api_consume():
+                    ev = Event.from_dict(event, bot=self)
+                    await self._handle_event(event=ev)
+            except Exception as e:
+                continue_running = await self.internal_exception_handler(e)
+
+    async def internal_exception_handler(self, exception):
+        logger.error('Internal exception handled', exc_info=exception)
+        return True
+
+    async def run_event(self, function, event):
+        try:
+            await function(event)
+        except Exception as exception:
+            await self.handle_bot_exception(function, event, exception)
+
+    async def handle_bot_exception(self, function, event, exception):
+        logger.exception(f'Failed running {event} in {function}')
+        await event.say(f':boom:... Houston we found a problem: `{exception}`')
 
     def start(self, event_loop: AbstractEventLoop = None):
         return asyncio.ensure_future(self.run_forever(), loop=event_loop)
