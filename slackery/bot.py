@@ -6,7 +6,7 @@ import logging
 import re
 from asyncio.events import AbstractEventLoop
 
-from sflack.http import SlackAPI
+from slackery.http import SlackAPI
 
 logger = logging.getLogger(__name__)
 
