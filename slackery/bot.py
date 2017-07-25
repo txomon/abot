@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, unicode_literals
+import argparse
 
 import asyncio
 import logging
@@ -90,9 +91,7 @@ class Bot:
                 continue
             already_matched = True
             logger.debug(f'Executing {event} in {function}')
-            asyncio.ensure_future(
-                self.run_event(function=function, event=event)
-            )
+            self.run_event(function=function, event=event)
         else:
             logger.debug(f'No matching {event}')
 
@@ -101,7 +100,9 @@ class Bot:
             return
         if getattr(event, 'subtype', None):
             return
-        await self._handle_message(MessageEvent.from_event(event=event))
+        asyncio.ensure_future(
+            self._handle_message(MessageEvent.from_event(event=event))
+        )
 
     async def run_forever(self):
         continue_running = True
