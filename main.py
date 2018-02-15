@@ -133,12 +133,15 @@ class DubtrackWS:
         if not self.heartbeat:
             # Just harcoding, not important
             self.heartbeat = asyncio.ensure_future(self.do_heartbeat(25000))
+        await asyncio.sleep(0.5)
         await self.ws_send('4{action: 10, channel: "room:561b1e59c90a9c0e00df610b"}')
+        await self.ws_send('4{"action":14,"channel":"room:561b1e59c90a9c0e00df610b","presence":{"action":0,"data":{}},"reqId":"%s"}' % gen_request_id())
+        await self.ws_send('4{"action":14,"channel":"room:561b1e59c90a9c0e00df610b","presence":{"action":0,"data":{}},"reqId":"%s"}' % gen_request_id())
 
     async def ws_api_consume(self):
         async for session, message in self.raw_ws_consume():
             # They have a digit+json... => 1{"asdf": "czxc"}
-            code = message.data[0]
+            code = message[0]
             if code == self.INIT:
                 continue  # Ignoring the heartbeat rate for now
             elif code == self.PING:
@@ -148,10 +151,11 @@ class DubtrackWS:
                 logger.debug('Received pong')
                 continue
             elif code != '4':  # 4 is the main case
-                logger.warning('Received unknown message {message.data}')
+                logger.warning('Received unknown message {message}')
                 continue
 
-            logger.info(f'Received message: {message}')
+            logger.debug(f'Received message: {message}')
+
 
 
 if __name__ == '__main__':
