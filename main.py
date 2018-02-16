@@ -38,6 +38,7 @@ class DubtrackWS:
     DATA = '4'
 
     def __init__(self, room='master-of-soundtrack'):
+        self.room = room
         self.heartbeat = None
         self.ws_client_id = None
         self.ws_session = None
@@ -52,11 +53,108 @@ class DubtrackWS:
         return response['data']
 
     async def get_token(self):
+        # {'action': 17,
+        #  'clientId': '4d3855621cd95d0d6a363806f712e2d0',
+        #  'reqId': 'b5509b95b608cb7609891ef9e162cba3',
+        #  'token': 'eyJhbGciOiJ.........HJwQL-7ytGnsXkucV5h_A_pV8V6YsA7DYQgxRpOaQMg'}
         response = await self.api_get('https://api.dubtrack.fm/auth/token')
         return response['token']
 
-    async def get_room_info(self, room):
-        response = await self.api_get(f'https://api.dubtrack.fm/room/{room}')
+    async def get_room_info(self):
+        # {'__v': 0,
+        #  '_id': '561b1e59c90a9c0e00df610b',
+        #  '_user': {'__v': 0,
+        #            '_id': '56097db281c87803009bd1c5',
+        #            'created': 1443462577850,
+        #            'dubs': 0,
+        #            'profileImage': {'bytes': 34965,
+        #                             'etag': '495e80a989c26e9a5e672f243c8f3322',
+        #                             'format': 'jpg',
+        #                             'height': 500,
+        #                             'overwritten': True,
+        #                             'placeholder': False,
+        #                             'resource_type': 'image',
+        #                             'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1510175888/user/56097db281c87803009bd1c5.jpg',
+        #                             'type': 'upload',
+        #                             'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1510175888/user/56097db281c87803009bd1c5.jpg',
+        #                             'version': 1510175888,
+        #                             'width': 500},
+        #            'roleid': 1,
+        #            'status': 1,
+        #            'username': 'mullins'},
+        #  'activeUsers': 9,
+        #  'allowedDjs': 0,
+        #  'background': {'bytes': 849194,
+        #                 'etag': '685925bd5248799f9f03eeeec7a485a1',
+        #                 'format': 'jpg',
+        #                 'height': 1200,
+        #                 'public_id': 'kealmtphavj32zsshcsd',
+        #                 'resource_type': 'image',
+        #                 'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1446588169/kealmtphavj32zsshcsd.jpg',
+        #                 'tags': [],
+        #                 'type': 'upload',
+        #                 'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1446588169/kealmtphavj32zsshcsd.jpg',
+        #                 'version': 1446588169,
+        #                 'width': 1920},
+        #  'created': 1444617817050,
+        #  'currentSong': {'fkid': '_imFm3FdFJE',
+        #                  'name': 'Ennio Morricone - Giù la testa - (1971)',
+        #                  'songid': '5824295e8fae8e0f00209a30',
+        #                  'type': 'youtube'},
+        #  'description': 'film/videogame scores/soundtracks and epic/trailer music.\n'
+        #         '\n'
+        #         'rules: http://mos.rf.gd/index.html\n'
+        #         'overplayed list: http://mos.rf.gd/overplayed.html\n'
+        #         'facebook page: https://www.facebook.com/MasterofSoundtrack/\n'
+        #         'mail address: masterofsoundtrack(@)yahoo.com\n'
+        #         '---\n'
+        #         'custom skin: http://bit.ly/dubtracky\n'
+        #         '---\n'
+        #         'dub+, helpful dubtrack extension: https://dub.plus/#/\n'
+        #         '---\n'
+        #         'next NameThatTune: '
+        #         'https://www.facebook.com/events/203834513429820/\n'
+        #         '---\n'
+        #         'first ever MoS review: http://bit.ly/296M8PX',
+        #  'displayDJinQueue': True,
+        #  'displayInLobby': True,
+        #  'displayInSearch': True,
+        #  'displayQueue': False,
+        #  'displayUserGrab': True,
+        #  'displayUserJoin': True,
+        #  'displayUserLeave': True,
+        #  'isPublic': False,
+        #  'lang': None,
+        #  'limitQueueLength': False,
+        #  'lockQueue': False,
+        #  'maxLengthSong': 11,
+        #  'maxSongQueueLength': 0,
+        #  'metaDescription': 'MoS, MasterOfSoundtrack, masterofsoundtrack, Master of '
+        #  'Soundtrack, master of soundtrack, scores, soundtrack, '
+        #  'movie, film, videogame, epic music, trailer',
+        #  'musicType': None,
+        #  'name': 'Master Of Soundtrack',
+        #  'otSession': None,
+        #  'password': None,
+        #  'realTimeChannel': 'dubtrackfm-master-of-soundtrack',
+        #  'recycleDJ': True,
+        #  'roomDisplay': 'public',
+        #  'roomEmbed': '',
+        #  'roomType': 'room',
+        #  'roomUrl': 'master-of-soundtrack',
+        #  'slowMode': False,
+        #  'status': 1,
+        #  'timeSongQueueRepeat': 1440,
+        #  'updated': 1444617817050,
+        #  'userid': '56097db281c87803009bd1c5',
+        #  'waitListRandom': False,
+        #  'welcomeMessage': 'Welcome to MoS! Please take 5 minutes to read the rules: '
+        #            'http://mos.rf.gd/index.html - Also check the OP list and '
+        #            'avoid those songs: http://mos.rf.gd/overplayed.html\n'
+        #            'Visit us on FB: http://xurl.es/hncih , next NTT: '
+        #            'http://xurl.es/3u71y'}
+
+        response = await self.api_get(f'https://api.dubtrack.fm/room/{self.room}')
         self.room_info = response
         return response
 
@@ -73,6 +171,7 @@ class DubtrackWS:
 
     async def raw_ws_consume(self):
         last_token_fail = last_consume_fail = 0
+        await self.get_room_info()
         while True:  # two tries per level
             try:
                 token = await self.get_token()
@@ -135,13 +234,32 @@ class DubtrackWS:
             await self.ws_send(self.PING)
             await asyncio.sleep(interval/1000)
 
+    async def send_room_subscription(self):
+        if not self.room_info or not self.room_info.get('_id'):
+            await self.get_room_info()
+        subscription = {
+            'action': 10,
+            "channel": f'room:{self.room_info["_id"]}',
+        }
+        await self.ws_send(f'4{json.dumps(subscription)}')
+
+    async def send_presence_update(self):
+        if not self.room_info or not self.room_info.get('_id'):
+            await self.get_room_info()
+        presence_update = {
+            "action": 14,
+            "channel": f'room:{self.room_info["_id"]}',
+            "presence": {"action": 0, "data": {}},
+            "reqId": gen_request_id()}
+        await self.ws_send(f'4{json.dumps(presence_update)}')
+
     async def ws_session_opened_cb(self):
         if not self.heartbeat:
             # Just harcoding, not important
             self.heartbeat = asyncio.ensure_future(self.do_heartbeat(25000))
         if not self.ws_client_id:
-            await self.ws_send('4{"action":10,"channel":"room:561b1e59c90a9c0e00df610b"}')
-        await self.ws_send('4{"action":14,"channel":"room:561b1e59c90a9c0e00df610b","presence":{"action":0,"data":{}},"reqId":"%s"}' % gen_request_id())
+            await self.send_room_subscription()
+        await self.send_presence_update()
 
     async def ws_api_consume(self):
         async for session, message in self.raw_ws_consume():
@@ -160,7 +278,7 @@ class DubtrackWS:
                 logger_layer1.warning('Received unknown message {message}')
                 continue
 
-            # logger.debug(f'Received message: {message}')
+            logger_layer1.debug(f'Received message: {message}')
 
             # Second layer: 4
             # They have action in the first level of the json
@@ -196,7 +314,7 @@ class DubtrackWS:
             # Third layer: 4=>action#15
             message = data['message']
             if message['type'] != 'json':
-                logger_layer3.warning(
+                logger_layer3.info(
                     f'Ignoring, becase type is not json: {message}')
                 continue
 
@@ -238,12 +356,12 @@ class DubtrackWS:
                 chatid = content['chatid']
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']
-                logger_layer3.info(
+                logger_layer3.debug(
                     f'Chat {username}#{userid} (chatid#{chatid}): {content["message"]}')
             elif content_type == 'chat-skip':
                 # {'type': 'chat-skip', 'username': 'txomon'}
                 username = content['username']
-                logger_layer3.info(f'Chat-skip by {username}')
+                logger_layer3.debug(f'Chat-skip by {username}')
             elif content_type == 'delete-chat-delete':
                 # {'chatid': '560b135c7ae1ea0300869b20-1518784684020',
                 #  'type': 'delete-chat-message',
@@ -261,7 +379,7 @@ class DubtrackWS:
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']
                 chatid = content['chatid']
-                logger_layer3.info(
+                logger_layer3.debug(
                     f'User {username}#{userid} deleted {chatid}')
             elif content_type == 'room_playlist-queue-update-dub':
                 # {'type': 'room_playlist-queue-update-dub',
@@ -281,7 +399,7 @@ class DubtrackWS:
                 status = content['user']['status']
                 roleid = content['user']['roleid']
                 dubs = content['user']['dubs']
-                logger_layer3.info(
+                logger_layer3.debug(
                     f'User {username}/{userid} changed personal queue')
             elif content_type == 'user-join':
                 # {'roomUser': {'__v': 0,
@@ -315,7 +433,7 @@ class DubtrackWS:
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']
                 # TODO: Explore roomUser
-                logger_layer3.info(f'User {username}{userid} joined')
+                logger_layer3.debug(f'User {username}{userid} joined')
             elif content_type == 'user-pause-queue':
                 # {'type': 'user-pause-queue',
                 #  'user': {'__v': 0,
@@ -349,7 +467,7 @@ class DubtrackWS:
 
                 # TODO: Explore user_queue.songsInQueue
 
-                logger_layer3.info(
+                logger_layer3.debug(
                     f'User {username}#{userid} stopped playlist')
 
             elif content_type == 'room_playlist-dub':
@@ -387,7 +505,7 @@ class DubtrackWS:
                 userid = content['user']['userInfo']['userid']
                 downdubs = content['playlist']['downdubs']
                 updubs = content['playlist']['updubs']
-                logger_layer3.info(
+                logger_layer3.debug(
                     f"Song {dubtype} by {username}#{userid}, total {updubs}U/{downdubs}D")
             elif content_type.startswith('user_update'):
                 # {'type': 'user_update_56096ce7a98a6b0300144e33',
@@ -414,7 +532,7 @@ class DubtrackWS:
                 played_count = user['playedCount']
                 songs_in_queue = user['songsInQueue']
                 dubs = user['dubs']
-                logger_layer3.info(
+                logger_layer3.debug(
                     f'User updated {userid}, skip {skipped_count}, played {played_count}, queue {songs_in_queue}, dubs {dubs}')
             elif content_type == 'room_playlist-update':
                 # {'startTime': -1,
@@ -446,7 +564,7 @@ class DubtrackWS:
                 name = songinfo['name']
                 songtype = songinfo['type']
                 songid = songinfo['fkid']
-                logger.info(f'Now playing {songtype}#{songid}: {name}')
+                logger_layer3.debug(f'Now playing {songtype}#{songid}: {name}')
             elif content_type == 'room_playlist-queue-reorder':
                 # {'type': 'room_playlist-queue-reorder',
                 #  'user': {'__v': 0,
@@ -462,10 +580,125 @@ class DubtrackWS:
                 #           'username': 'txomon'}}
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']
-                logger.info(f'User {username}#{userid} reordered the queue')
+                logger_layer3.debug(f'User {username}#{userid} reordered the queue')
+            elif content_type == 'user-unsetrole':
+                # {'modUser': {'__v': 0,
+                #              '_id': '560b135c7ae1ea0300869b20',
+                #              'created': 1443566427591,
+                #              'dubs': 0,
+                #              'profileImage': {'bytes': 444903,
+                #                               'etag': '09da0f0c34e6ddf6eb75516ea66e17bc',
+                #                               'format': 'gif',
+                #                               'height': 245,
+                #                               'overwritten': True,
+                #                               'pages': 22,
+                #                               'public_id': 'user/560b135c7ae1ea0300869b20',
+                #                               'resource_type': 'image',
+                #                               'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                               'tags': [],
+                #                               'type': 'upload',
+                #                               'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                               'version': 1486657178,
+                #                               'width': 245},
+                #              'roleid': 1,
+                #              'status': 1,
+                #              'username': 'txomon'},
+                #  'role_object': {'__v': 0,
+                #                  '_id': '52d1ce33c38a06510c000001',
+                #                  'label': 'Moderator',
+                #                  'rights': ['skip',
+                #                             'queue-order',
+                #                             'kick',
+                #                             'ban',
+                #                             'mute',
+                #                             'set-dj',
+                #                             'lock-queue',
+                #                             'delete-chat',
+                #                             'chat-mention'],
+                #                  'type': 'mod'},
+                #  'type': 'user-unsetrole',
+                #  'user': {'__v': 0,
+                #           '_force_updated': 1499443841892,
+                #           '_id': '5628edc08d7d6a5600335d3d',
+                #           'created': 1445522880666,
+                #           'dubs': 0,
+                #           'roleid': 1,
+                #           'status': 1,
+                #           'userInfo': {'__v': 0,
+                #                        '_id': '5628edc08d7d6a5600335d3e',
+                #                        'userid': '5628edc08d7d6a5600335d3d'},
+                #           'username': 'iCel'}}
+                modname = content['modUser']['username']
+                modid = content['modUser']['_id']
+                role = content['role_object']['label']
+                roletype = content['role_object']['type']
+                rights = content['role_object']['rights']
+                username = content['user']['username']
+                userid = content['user']['userInfo']['userid']
+                logger_layer3.debug(
+                    'User {modname}#{modid} removed from role {role}/{roletype}({", ".join(rights)}) by {username}#{userid}')
+            elif content_type == 'user-setrole':
+                # {'modUser': {'__v': 0,
+                #              '_id': '560b135c7ae1ea0300869b20',
+                #              'created': 1443566427591,
+                #              'dubs': 0,
+                #              'profileImage': {'bytes': 444903,
+                #                               'etag': '09da0f0c34e6ddf6eb75516ea66e17bc',
+                #                               'format': 'gif',
+                #                               'height': 245,
+                #                               'overwritten': True,
+                #                               'pages': 22,
+                #                               'public_id': 'user/560b135c7ae1ea0300869b20',
+                #                               'resource_type': 'image',
+                #                               'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                               'tags': [],
+                #                               'type': 'upload',
+                #                               'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                               'version': 1486657178,
+                #                               'width': 245},
+                #              'roleid': 1,
+                #              'status': 1,
+                #              'username': 'txomon'},
+                #  'role_object': {'__v': 0,
+                #                  '_id': '52d1ce33c38a06510c000001',
+                #                  'label': 'Moderator',
+                #                  'rights': ['skip',
+                #                             'queue-order',
+                #                             'kick',
+                #                             'ban',
+                #                             'mute',
+                #                             'set-dj',
+                #                             'lock-queue',
+                #                             'delete-chat',
+                #                             'chat-mention'],
+                #                  'type': 'mod'},
+                #  'type': 'user-setrole',
+                #  'user': {'__v': 0,
+                #           '_force_updated': 1499443841892,
+                #           '_id': '5628edc08d7d6a5600335d3d',
+                #           'created': 1445522880666,
+                #           'dubs': 0,
+                #           'roleid': 1,
+                #           'status': 1,
+                #           'userInfo': {'__v': 0,
+                #                        '_id': '5628edc08d7d6a5600335d3e',
+                #                        'userid': '5628edc08d7d6a5600335d3d'},
+                #           'username': 'iCel'}}
+                modname = content['modUser']['username']
+                modid = content['modUser']['_id']
+                role = content['role_object']['label']
+                roletype = content['role_object']['type']
+                rights = content['role_object']['rights']
+                username = content['user']['username']
+                userid = content['user']['userInfo']['userid']
+                logger_layer3.debug(
+                    'User {modname}#{modid} moved to role {role}/{roletype}({", ".join(rights)}) by {username}#{userid}')
             else:
                 logger_layer3.info(
-                    f'Received message {content_type}: {pprint.pformat(content)}')
+                    f'Received unknown message {content_type}: {pprint.pformat(content)}')
+
+class DubtrackBot:
+    pass
 
 
 if __name__ == '__main__':
