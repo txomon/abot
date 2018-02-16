@@ -169,6 +169,55 @@ class DubtrackWS:
     async def get_user(self, user_id):
         return await self.api_get(f'https://api.dubtrack.fm/user/{user_id}')
 
+    async def get_history(self, page=None):
+        # [{'__v': 0,
+        #   '_id': '5a8453aed51c3101003def50',
+        #   '_song': {'__v': 0,
+        #             '_id': '5795e51c828c22790037db1e',
+        #             'created': '2016-07-25T10:08:28.691Z',
+        #             'fkid': 'EqkFgAn4U-o',
+        #             'images': {'thumbnail': 'https://i.ytimg.com/vi/EqkFgAn4U-o/hqdefault.jpg'},
+        #             'name': 'Me Before You Orchestral- Craig Armstrong (Me Before You- The Score)',
+        #             'songLength': 434000,
+        #             'type': 'youtube'},
+        #   '_user': {'__v': 0,
+        #             '_id': '56a80c626894b9410067b716',
+        #             'created': 1453853793914,
+        #             'dubs': 0,
+        #             'profileImage': {'bytes': 33387,
+        #                              'etag': '0eb4420cbced52aa81f1bd3368a87f27',
+        #                              'format': 'gif',
+        #                              'height': 325,
+        #                              'pages': 4,
+        #                              'public_id': 'user/56a80c626894b9410067b716',
+        #                              'resource_type': 'image',
+        #                              'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1477307984/user/56a80c626894b9410067b716.gif',
+        #                              'tags': [],
+        #                              'type': 'upload',
+        #                              'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1477307984/user/56a80c626894b9410067b716.gif',
+        #                              'version': 1477307984,
+        #                              'width': 325},
+        #             'roleid': 1,
+        #             'status': 1,
+        #             'username': 'hennersC'},
+        #     'created': 1518621605692,
+        #     'downdubs': 0,
+        #     'isActive': True,
+        #     'isPlayed': True,
+        #     'order': 10,
+        #     'played': 1518787795607,
+        #     'roomid': '561b1e59c90a9c0e00df610b',
+        #     'skipped': False,
+        #     'songLength': 434000,
+        #     'songid': '5795e51c828c22790037db1e',
+        #     'updubs': 2,
+        #     'userid': '56a80c626894b9410067b716'}]
+        room_id = self.room_info['_id']
+        url = f'https://api.dubtrack.fm/room/{room_id}/playlist/history'
+        if page:
+            url = URL(page).with_query({'page': page})
+        return await self.api_get(url)
+
     async def raw_ws_consume(self):
         last_token_fail = last_consume_fail = 0
         await self.get_room_info()
@@ -580,7 +629,8 @@ class DubtrackWS:
                 #           'username': 'txomon'}}
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']
-                logger_layer3.debug(f'User {username}#{userid} reordered the queue')
+                logger_layer3.debug(
+                    f'User {username}#{userid} reordered the queue')
             elif content_type == 'user-unsetrole':
                 # {'modUser': {'__v': 0,
                 #              '_id': '560b135c7ae1ea0300869b20',
@@ -696,6 +746,7 @@ class DubtrackWS:
             else:
                 logger_layer3.info(
                     f'Received unknown message {content_type}: {pprint.pformat(content)}')
+
 
 class DubtrackBot:
     pass
