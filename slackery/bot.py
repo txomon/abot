@@ -13,115 +13,43 @@ from slackery.http import SlackAPI
 logger = logging.getLogger(__name__)
 
 
-def match(expression: str, message: str):
-    return re.fullmatch(expression, message)
+class Entity:
+    async def tell(self, text: str, to: str = None):
+        # Say something to the sender
+        raise NotImplementedError()
 
 
 class Event:
-    affinity = None
-
-    def __init__(self, content, bot):
-        self.content = content
-        self.bot = bot
-
-    @classmethod
-    def from_obj(cls, content, bot):
-        for cl in cls.__subclasses__():
-            if cl.affinity == content['type']:
-                return cl(content, bot)
-        else:
-            return cls(content, bot)
-
-
-class MessageEvent(Event):
-    affinity = 'message'
+    @property
+    def sender(self) -> Entity:
+        # Return the entity that sent this
+        raise NotImplementedError()
 
     async def say(self, text: str, to: str = None):
         # Say something in the same channel as the message
-        if to is None:
-            to = self.content['channel']
-        await self.bot.slack_api.write_to(to, text)
+        raise NotImplementedError()
+
+    async def reply(self, text: str, to: str = None)
+        # Reply to the message mentioning if possible
+        raise NotImplementedError()
 
     async def tell(self, text: str, to: str = None):
-        if to is None:
-            to = self.content['user']
-        # Say something to the sender
-        await self.bot.slack_api.write_to(to, text)
+        # Say something to the sender directly if possible
+        raise NotImplementedError()
 
-    @property
-    def sender(self):
-        return self.bot.slack_api.get_user_by_id(self.content['user'])
 
+class MessageEvent(Event):
     @property
     def text(self):
-        return self.content['text']
-
-    @property
-    def matches(self):
-        if not hasattr(self, '_matches'):
-            self._matches = {}
-        return self._matches
-
-    @matches.setter
-    def matches(self, matches):
-        if hasattr(self, '_matches'):
-            raise ValueError('Matches can only be set once')
-        self._matches = matches
-
-
-def create_shlex_error(parser: shlex.shlex, exception: ValueError) -> str:
-    current_read = parser.instream.tell() - 1
-    token_length = len(parser.token)
-    full_string = parser.instream.getvalue()
-
-    guilty_string = full_string[current_read - token_length:]
-
-    try:
-        exception_value = exception.args[0].lower()
-    except:
-        exception_value = 'unknown exception'
-    error_string = f'Bad command, {exception_value}: {guilty_string}'
-    return error_string
-
-
-def tokenize_event(event: MessageEvent):
-    parser = shlex.shlex(event.content, posix=True, punctuation_chars=True)
-    parser.whitespace = ' \t'
-    tokens = []
-    try:
-        while True:
-            token = parser.get_token()
-            if token is None:
-                break
-            tokens.append(token)
-    except ValueError as e:
-        string = create_shlex_error(parser=parser, exception=e)
-        raise ValueError(string) from None
-    return tokens
-
-
-def get_commands_from_tokens(tokens):
-    command = []
-    for token in tokens:
-        if token in ['&&', '\r', ';', '\n', '||', '&']:
-            if command:
-                yield command, token
-                command = []
-        else:
-            command.append(token)
+        # Return the content of the message in plaintext
+        raise NotImplementedError()
 
 
 class Bot:
-    def __init__(self, bot_name, spaced_names=True, **slack_api_kwargs):
-        if isinstance(bot_name, str):
-            bot_name = [bot_name]
+    def __init__(self):
         self.commands = {}
-        self.slack_api = SlackAPI(**slack_api_kwargs)
-        self.bot_names = bot_name
-        self.spaced_names = spaced_names
-        self.expression_values = {'bot_name': fr'(?P<bot_name>{"|".join(bot_name)})'}
 
-    def add_name_lead_command(self, expr, *, func=None):
+    def add_addressed_command(self, expr, *, func=None):
         def wrapper(f):
             assert callable(f)
             if self.spaced_names:
@@ -137,7 +65,8 @@ class Bot:
             wrapper(func)
 
     def add_message_handler(self, rexpression, *, func=None):
-        assert iscoroutinefunction(func), f'Handler for {rexpression} needs to be coroutine ({func.__name__})'
+        assert iscoroutinefunction(
+            func), f'Handler for {rexpression} needs to be coroutine ({func.__name__})'
         self.commands[rexpression] = func
 
     async def _handle_message(self, event: MessageEvent):
@@ -155,10 +84,12 @@ class Bot:
                 message = ' '.join(command)
                 message_match = match(expression=expression, message=message)
                 if not message_match:
-                    logger.debug(f'Text `{message}` didn\'t match `{expression}`')
+                    logger.debug(
+                        f'Text `{message}` didn\'t match `{expression}`')
                     continue
                 if already_matched:
-                    logger.warning(f'Skipping already executed {message} (Would have been {func})')
+                    logger.warning(
+                        f'Skipping already executed {message} (Would have been {func})')
                     continue
                 already_matched = True
                 event.matches = message_match.groupdict()
