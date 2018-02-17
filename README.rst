@@ -1,0 +1,2 @@
+This project is focused on giving a proper interface for bot creation. Although for now it is just focused on slack
+and using the RTM API, hopefully (tm) it will evolve to something multi client, maintaining the same interface.
