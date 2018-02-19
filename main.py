@@ -8,6 +8,8 @@ import sqlalchemy as sa
 from abot.bot import Bot
 from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackWS
 
+logger = logging.getLogger()
+
 metadata = sa.MetaData()
 Songs = sa.Table('song_history', metadata,
                  sa.Column('id', sa.Integer, primary_key=True),
