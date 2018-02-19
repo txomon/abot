@@ -9,6 +9,7 @@ import time
 from collections import defaultdict
 
 import aiohttp
+import aiostream
 import sqlalchemy as sa
 from yarl import URL
 
@@ -836,17 +837,6 @@ def create_sqlite_db():
     metadata.create_all(engine)
 
 
-async def test():
-    for n in range(1000):
-        yield n
-        await asyncio.sleep(0.2)
-
-
-async def probe():
-    t1, t2 = test(), test()
-    async for ready, done in any(t1, t2):
-        print(ready, done)
-
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
@@ -856,4 +846,5 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     # loop.run_until_complete(dubtrack.ws_api_consume())
     # create_sqlite_db()
-    loop.run_until_complete(download_all_songs())
+    # loop.run_until_complete(download_all_songs())
+

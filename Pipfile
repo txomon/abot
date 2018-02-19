@@ -9,6 +9,7 @@ name = "pypi"
 
 aiohttp = "*"
 sqlalchemy = "*"
+aiostream = "*"
 
 
 [dev-packages]
