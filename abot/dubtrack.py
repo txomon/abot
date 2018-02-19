@@ -23,7 +23,7 @@ logger_layer3 = logging.getLogger('dubtrack.layer3')
 
 # Dubtrack specific objects
 class DubtrackObject(BotObject):
-    def __init__(self, data, dubtrack_backend: DubtrackBotBackend):
+    def __init__(self, data, dubtrack_backend: 'DubtrackBotBackend'):
         self._data = data
         self._dubtrack_backend = dubtrack_backend
 
@@ -42,7 +42,7 @@ class DubtrackEvent(DubtrackObject, Event):
     _data_type = ''
 
     @classmethod
-    def from_data(cls, data, dubtrack_backend: DubtrackBotBackend):
+    def from_data(cls, data, dubtrack_backend: 'DubtrackBotBackend'):
         for cl in cls.__subclasses__():
             if cl._data_type == data['type']:
                 return cl(data, dubtrack_backend)
@@ -72,6 +72,8 @@ class DubtrackEvent(DubtrackObject, Event):
 
 
 class DubtrackMessage(DubtrackEvent, MessageEvent):
+    _data_type = 'chat-message'
+
     @property
     def text(self):
         return self._data['message']
@@ -80,9 +82,15 @@ class DubtrackMessage(DubtrackEvent, MessageEvent):
 # Dubtrack bot plugin
 
 class DubtrackBotBackend(Backend):
-    def __init__(self, room='master-of-soundtrack'):
-        self.dubtrackws = DubtrackWS(room=room)
+    def __init__(self):
+        self.dubtrackws = DubtrackWS()
         self.dubtrack_channel = None
+
+    def configure(self, *, username=None, password=None):
+        self.dubtrackws.set_login(username, password)
+
+    async def initialize(self):
+        await self.dubtrackws.initialize()
 
     async def consume(self):
         await self.dubtrackws.get_room_id()
@@ -110,11 +118,23 @@ class DubtrackWS:
         self.heartbeat = None
         self.ws_client_id = None
         self.ws_session = None
-        self.room_info = None
         self.connection_id = None
         self.connected_clients = defaultdict(set)
-        self.aio_session = aiohttp.ClientSession()
+        self.aio_session = None
         self.user_session_info = None
+        self.room_user_info = None
+        self.room_info = None
+        self.userpass = None
+
+    async def initialize(self):
+        self.aio_session = aiohttp.ClientSession()
+        if self.userpass:
+            await self.login(*self.userpass)
+
+    def set_login(self, username, password):
+        if any((self.user_session_info, self.room_user_info, self.room_info)):
+            raise ValueError('Once started, cannot login')
+        self.userpass = (username, password)
 
     async def api_post(self, url, body):
         async with self.aio_session.post(url, json=body) as resp:
@@ -164,7 +184,7 @@ class DubtrackWS:
                 'user': self.user_session_info,
                 'userRole': self.get_user_role(), }
         room_id = await self.get_room_id()
-        response = await self.aio_session.post(f'https://api.dubtrack.fm/chat/{room_id}')
+        response = await self.aio_session.post(f'https://api.dubtrack.fm/chat/{room_id}', json=body)
         return response
 
     async def login(self, username, password):

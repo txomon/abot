@@ -8,23 +8,31 @@ from asyncio.events import AbstractEventLoop
 
 import aiostream
 
+from abot.util import iterator_merge
+
 logger = logging.getLogger(__name__)
 
 
 class Backend:
+    def configure(self):
+        raise NotImplementedError
+
+    async def initialize(self):
+        raise NotImplementedError()
+
     async def consume(self):
         raise NotImplementedError()
 
 
 class BotObject:
     @property
-    def bot(self) -> Bot:
+    def bot(self) -> 'Bot':
         if hasattr(self, '_bot'):
             return self._bot
         raise ValueError('Bot is not set in BotObject')
 
     @bot.setter
-    def bot(self, bot: Bot):
+    def bot(self, bot: 'Bot'):
         if hasattr(self, '_bot'):
             raise ValueError(f'Bot {self._bot} is in place, cannot replace with {bot}')
         self._bot = bot
@@ -99,10 +107,11 @@ class Bot:
             wrapper(func)
 
     async def _handle_event(self, event: Event):
-        if isinstance(event, MessageEvent):
-            logger.debug(f'Message event {event} handling as message')
-            self._handle_message(event)
-            return
+        # TODO: Generate _handle_message
+        # if isinstance(event, MessageEvent):
+        #     logger.debug(f'Message event {event} handling as message')
+        #     self._handle_message(event)
+        #     return
         for cls in inspect.getmro(event.__class__):
             handler = self.event_handlers.get(cls)
             if handler:
@@ -116,9 +125,13 @@ class Bot:
 
     async def run_forever(self):
         continue_running = True
+
+        for backend in self.backends:
+            await backend.initialize()
+
         while continue_running:
             try:
-                async for event in aiostream.stream.merge(self.backends.values()):
+                async for event in iterator_merge(*self.backends.values()):
                     asyncio.ensure_future(self._handle_event(event=event))
             except Exception as e:
                 continue_running = await self.internal_exception_handler(e)
