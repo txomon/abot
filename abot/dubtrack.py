@@ -8,17 +8,16 @@ import random
 import string
 import time
 from collections import defaultdict
-from urllib.parse import urlencode
 
 import aiohttp
 from yarl.__init__ import URL
 
 from abot.bot import Backend, BotObject, Channel, Entity, Event, MessageEvent
 
-logger = logging.getLogger('dubtrack')
-logger_layer1 = logging.getLogger('dubtrack.layer1')
-logger_layer2 = logging.getLogger('dubtrack.layer2')
-logger_layer3 = logging.getLogger('dubtrack.layer3')
+logger = logging.getLogger('abot.dubtrack')
+logger_layer1 = logging.getLogger('abot.dubtrack.layer1')
+logger_layer2 = logging.getLogger('abot.dubtrack.layer2')
+logger_layer3 = logging.getLogger('abot.dubtrack.layer3')
 
 
 # Dubtrack specific objects
@@ -70,6 +69,9 @@ class DubtrackEvent(DubtrackObject, Event):
         # Reply to the message mentioning if possible
         raise NotImplementedError()
 
+    def __repr__(self):
+        return f'<DubtrackEvent #{self._data["type"]}>'
+
 
 class DubtrackMessage(DubtrackEvent, MessageEvent):
     _data_type = 'chat-message'
@@ -78,6 +80,21 @@ class DubtrackMessage(DubtrackEvent, MessageEvent):
     def text(self):
         return self._data['message']
 
+
+class DubtrackSkip(DubtrackEvent):
+    _data_type = 'chat-skip'
+
+
+class DubtrackDeleteMessage(DubtrackEvent):
+    _data_type = 'delete-chat-message'
+
+
+class DubtrackRoomPlaylistQueueUpdate(DubtrackEvent):
+    _data_type = 'room_playlist-queue-update-dub'
+
+
+class DubtrackUserJoin(DubtrackEvent):
+    _data_type = 'user-join'
 
 # Dubtrack bot plugin
 
@@ -88,9 +105,15 @@ class DubtrackBotBackend(Backend):
 
     def configure(self, *, username=None, password=None):
         self.dubtrackws.set_login(username, password)
+        ps = '*' * len(password)
+        logger.debug(f'Setting username={username}, password={ps}')
 
     async def initialize(self):
-        await self.dubtrackws.initialize()
+        # Steps are
+        session_info = await self.dubtrackws.initialize()
+        username = session_info['username']
+        userid = session_info['userInfo']['userid']
+        logger.info(f'Logged in as {username}#{userid}')
 
     async def consume(self):
         await self.dubtrackws.get_room_id()
@@ -125,11 +148,15 @@ class DubtrackWS:
         self.room_user_info = None
         self.room_info = None
         self.userpass = None
+        self.suppress_messages = list()
 
     async def initialize(self):
         self.aio_session = aiohttp.ClientSession()
+        # POST https://api.dubtrack.fm/auth/dubtrack
         if self.userpass:
             await self.login(*self.userpass)
+        # GET https://api.dubtrack.fm/auth/session
+        return await self.get_user_session_info()
 
     def set_login(self, username, password):
         if any((self.user_session_info, self.room_user_info, self.room_info)):
@@ -147,15 +174,141 @@ class DubtrackWS:
         return response['data']
 
     async def get_user_session_info(self):
+        # {"userInfo": {"_id": "560b135c7ae1ea0300869b21",
+        #               "userid": "560b135c7ae1ea0300869b20",
+        #               "__v": 0},
+        #  "_id": "560b135c7ae1ea0300869b20",
+        #  "username": "txomon",
+        #  "status": 1,
+        #  "roleid": 1,
+        #  "dubs": 0,
+        #  "created": 1443566427591,
+        #  "profileImage": {"public_id": "user/560b135c7ae1ea0300869b20",
+        #                   "version": 1486657178,
+        #                   "width": 245,
+        #                   "height": 245,
+        #                   "format": "gif",
+        #                   "resource_type": "image",
+        #                   "tags": [],
+        #                   "pages": 22,
+        #                   "bytes": 444903,
+        #                   "type": "upload",
+        #                   "etag": "09da0f0c34e6ddf6eb75516ea66e17bc",
+        #                   "url": "http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user"
+        #                          "/560b135c7ae1ea0300869b20.gif",
+        #                   "secure_url":
+        #                       "https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user"
+        #                       "/560b135c7ae1ea0300869b20.gif",
+        #                   "overwritten": True},
+        #  "__v": 0}
         if not self.user_session_info:
             self.user_session_info = await self.api_get('https://api.dubtrack.fm/auth/session')
+
         return self.user_session_info
 
     async def get_user_role(self):
+        # {"room": {"_id": "561b1e59c90a9c0e00df610b",
+        #           "name": "Master Of Soundtrack",
+        #           "description": "film/videogame scores/soundtracks and epic/trailer music.\n\nrules: "
+        #                          "http://mos.rf.gd/index.html\noverplayed list: "
+        #                          "http://mos.rf.gd/overplayed.html\nfacebook page: "
+        #                          "https://www.facebook.com/MasterofSoundtrack/\nmail address: masterofsoundtrack("
+        #                          "@)yahoo.com\n---\ncustom skin: http://bit.ly/dubtracky\n---\ndub+, "
+        #                          "helpful dubtrack extension: https://dub.plus/#/\n---\nnext NameThatTune: "
+        #                          "https://www.facebook.com/events/203834513429820/\n---\nfirst ever MoS review: "
+        #                          "http://bit.ly/296M8PX",
+        #           "roomUrl": "master-of-soundtrack",
+        #           "realTimeChannel": "dubtrackfm-master-of-soundtrack",
+        #           "status": 1,
+        #           "roomType": "room",
+        #           "isPublic": False,
+        #           "lang": None,
+        #           "musicType": None,
+        #           "password": None,
+        #           "allowedDjs": 0,
+        #           "maxLengthSong": 11,
+        #           "displayQueue": False,
+        #           "background": {"public_id": "kealmtphavj32zsshcsd",
+        #                          "version": 1446588169,
+        #                          "width": 1920,
+        #                          "height": 1200,
+        #                          "format": "jpg",
+        #                          "resource_type": "image",
+        #                          "tags": [],
+        #                          "bytes": 849194,
+        #                          "type": "upload",
+        #                          "etag": "685925bd5248799f9f03eeeec7a485a1",
+        #                          "url": "http://res.cloudinary.com/hhberclba/image/upload/v1446588169"
+        #                                 "/kealmtphavj32zsshcsd.jpg",
+        #                          "secure_url": "https://res.cloudinary.com/hhberclba/image/upload/v1446588169"
+        #                                        "/kealmtphavj32zsshcsd.jpg"},
+        #           "created": 1444617817050,
+        #           "updated": 1444617817050,
+        #           "userid": "56097db281c87803009bd1c5",
+        #           "roomEmbed": "",
+        #           "otSession": None,
+        #           "_user": "56097db281c87803009bd1c5",
+        #           "__v": 0,
+        #           "activeUsers": 9,
+        #           "currentSong": {"songid": "5677f5e03d9c59270031d943",
+        #                           "type": "youtube",
+        #                           "fkid": "XHaeAUFaHBU",
+        #                           "name": "Halo Wars OST 01 Spirit of Fire"},
+        #           "lockQueue": False,
+        #           "welcomeMessage": "Welcome to MoS! Please take 5 minutes to read the rules: "
+        #                             "http://mos.rf.gd/index.html - Also check the OP list and avoid those songs: "
+        #                             "http://mos.rf.gd/overplayed.html\nVisit us on FB: http://xurl.es/hncih , "
+        #                             "next NTT: http://xurl.es/3u71y",
+        #           "metaDescription": "MoS, MasterOfSoundtrack, masterofsoundtrack, Master of Soundtrack, "
+        #                              "master of soundtrack, scores, soundtrack, movie, film, videogame, "
+        #                              "epic music, trailer",
+        #           "displayInLobby": True,
+        #           "displayInSearch": True,
+        #           "limitQueueLength": False,
+        #           "timeSongQueueRepeat": 1440,
+        #           "recycleDJ": True,
+        #           "displayDJinQueue": True,
+        #           "displayUserJoin": True,
+        #           "displayUserLeave": True,
+        #           "displayUserGrab": True,
+        #           "maxSongQueueLength": 0,
+        #           "roomDisplay": "public",
+        #           "waitListRandom": False,
+        #           "slowMode": False},
+        #  "user": {"_id": "5628db0a3883a45600b7e68f",
+        #           "updated": 1519066844284,
+        #           "skippedCount": 0,
+        #           "playedCount": 1677,
+        #           "songsInQueue": 0,
+        #           "active": False,
+        #           "dubs": 372,
+        #           "order": 999999999,
+        #           "roomid": "561b1e59c90a9c0e00df610b",
+        #           "userid": "560b135c7ae1ea0300869b20",
+        #           "_user": "560b135c7ae1ea0300869b20",
+        #           "__v": 0,
+        #           "ot_token": None,
+        #           "authorized": True,
+        #           "queuePaused": None,
+        #           "waitLine": 0,
+        #           "roleid": {"_id": "52d1ce33c38a06510c000001",
+        #                      "type": "mod",
+        #                      "label": "Moderator",
+        #                      "rights": ["skip",
+        #                                 "queue-order",
+        #                                 "kick",
+        #                                 "ban",
+        #                                 "mute",
+        #                                 "set-dj",
+        #                                 "lock-queue",
+        #                                 "delete-chat",
+        #                                 "chat-mention"],
+        #                      "__v": 0}}}
+
         if not self.room_user_info:
             room_id = await self.get_room_id()
             self.room_user_info = await self.api_post(f'https://api.dubtrack.fm/room/{room_id}/users', None)
-        return self.room_user_info['roleid']['type']
+        return self.room_user_info['user']['roleid']['type']
 
     async def say_in_room(self, text):
         # {"message": "pfff",
@@ -182,13 +335,14 @@ class DubtrackWS:
                 'time': int(time.time() * 1000),
                 'type': 'chat-message',
                 'user': self.user_session_info,
-                'userRole': self.get_user_role(), }
+                'userRole': await self.get_user_role(), }
         room_id = await self.get_room_id()
         response = await self.aio_session.post(f'https://api.dubtrack.fm/chat/{room_id}', json=body)
+        self.suppress_messages.append(text)
         return response
 
     async def login(self, username, password):
-        data = urlencode({'username': username, 'password': password})
+        data = {'username': username, 'password': password}
         await self.aio_session.post('https://api.dubtrack.fm/auth/dubtrack', data=data)
 
     async def get_token(self):
@@ -360,7 +514,7 @@ class DubtrackWS:
         url = URL(f'https://api.dubtrack.fm/room/{room_id}/playlist/history')
         if page:
             url = url.with_query({'page': page})
-        return await self.api_get(url)
+        return await self.api_get(str(url))
 
     async def raw_ws_consume(self):
         last_token_fail = last_consume_fail = 0
@@ -546,8 +700,13 @@ class DubtrackWS:
                 chatid = content['chatid']
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']
+                msg = content["message"]
                 logger_layer3.debug(
-                    f'Chat {username}#{userid} (chatid#{chatid}): {content["message"]}')
+                    f'Chat {username}#{userid} (chatid#{chatid}): {msg}')
+                if msg in self.suppress_messages:
+                    self.suppress_messages.remove(msg)
+                    logger_layer3.debug(f'Suppressing message: {msg}')
+                    continue
             elif content_type == 'chat-skip':
                 # {'type': 'chat-skip', 'username': 'txomon'}
                 username = content['username']

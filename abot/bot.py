@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class Backend:
-    def configure(self):
+    def configure(self, **config):
         raise NotImplementedError
 
     async def initialize(self):
@@ -119,9 +119,8 @@ class Bot:
         else:
             logger.warning(f'No message handler for {event}')
             return
-        logger.debug(f'Handling {event} with {handler}')
+        logger.debug(f'Handling {event} with <{handler.__name__}>')
         await handler(event)
-        logger.debug(f'Handler {handler} of {event} returned')
 
     async def run_forever(self):
         continue_running = True

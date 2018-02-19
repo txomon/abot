@@ -6,7 +6,7 @@ import logging
 import sqlalchemy as sa
 
 from abot.bot import Bot
-from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackWS, logger, logger_layer1, logger_layer2
+from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackWS
 
 metadata = sa.MetaData()
 Songs = sa.Table('song_history', metadata,
@@ -20,6 +20,7 @@ Songs = sa.Table('song_history', metadata,
 
 async def download_all_songs():
     dws = DubtrackWS()
+    await dws.initialize()
     engine = get_engine()
     conn = engine.connect()
     with open('last_page') as fd:
@@ -77,14 +78,16 @@ def create_sqlite_db():
     metadata.create_all(engine)
 
 
-async def message_handler(message):
+async def message_handler(message: DubtrackMessage):
     print(f'Received {message.text}')
+    # await message.channel.say('Bot speaking here')
 
 
 def run_bot():
     # Setup
     bot = Bot()
     dubtrack_backend = DubtrackBotBackend()
+    dubtrack_backend.configure()
     bot.attach_backend(backend=dubtrack_backend)
 
     bot.add_event_handler(DubtrackMessage, func=message_handler)
@@ -96,8 +99,10 @@ def run_bot():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    logger_layer1.setLevel(logging.WARNING)
-    logger_layer2.setLevel(logging.WARNING)
+    logging.getLogger('abot.dubtrack').setLevel(logging.DEBUG)
+    logging.getLogger('abot.dubtrack.layer1').setLevel(logging.WARNING)
+    logging.getLogger('abot.dubtrack.layer2').setLevel(logging.WARNING)
+    logging.getLogger('abot.dubtrack.layer3').setLevel(logging.WARNING)
     dubtrack = DubtrackWS()
     loop = asyncio.get_event_loop()
     # loop.run_until_complete(dubtrack.ws_api_consume())
