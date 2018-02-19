@@ -4,6 +4,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 import asyncio
 import json
 import logging
+import pprint
 import random
 import string
 import time
@@ -77,6 +78,10 @@ class DubtrackEvent(DubtrackObject, Event):
 class DubtrackMessage(DubtrackEvent, MessageEvent):
     _data_type = 'chat-message'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
+
     @property
     def text(self):
         return self._data['message']
@@ -102,6 +107,10 @@ class DubtrackSkip(DubtrackEvent):
 class DubtrackDelete(DubtrackEvent):
     _data_type = 'delete-chat-message'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
+
     def __repr__(self):
         cls = self.__class__.__name__
         chatid = self._data['chatid']
@@ -112,6 +121,10 @@ class DubtrackDelete(DubtrackEvent):
 
 class DubtrackDub(DubtrackEvent):
     _data_type = 'room_playlist-dub'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -126,6 +139,10 @@ class DubtrackDub(DubtrackEvent):
 class DubtrackRoomQueueReorder(DubtrackEvent):
     _data_type = 'room_playlist-queue-reorder'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
+
     def __repr__(self):
         cls = self.__class__.__name__
         username = self._data['user']['username']
@@ -136,10 +153,14 @@ class DubtrackRoomQueueReorder(DubtrackEvent):
 class DubtrackUserQueueUpdate(DubtrackEvent):
     _data_type = 'room_playlist-queue-update-dub'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
+
     def __repr__(self):
         cls = self.__class__.__name__
-        username = content['user']['username']
-        userid = content['user']['userInfo']['userid']
+        username = self._data['user']['username']
+        userid = self._data['user']['userInfo']['userid']
         return f'<{cls} {username}#{userid}>'
 
 
@@ -158,6 +179,10 @@ class DubtrackPlaying(DubtrackEvent):
 class DubtrackJoin(DubtrackEvent):
     _data_type = 'user-join'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
+
     def __repr__(self):
         cls = self.__class__.__name__
         username = self._data['user']['username']
@@ -168,6 +193,10 @@ class DubtrackJoin(DubtrackEvent):
 class DubtrackUserPauseQueue(DubtrackEvent):
     _data_type = 'user-pause-queue'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
+
     def __repr__(self):
         cls = self.__class__.__name__
         username = self._data['user']['username']
@@ -177,6 +206,11 @@ class DubtrackUserPauseQueue(DubtrackEvent):
 
 class DubtrackSetRole(DubtrackEvent):
     _data_type = 'user-setrole'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
+        self._dubtrack_backend._register_user(self._data['modUser'])
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -193,6 +227,11 @@ class DubtrackSetRole(DubtrackEvent):
 class DubtrackUnSetRole(DubtrackEvent):
     _data_type = 'user-unsetrole'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
+        self._dubtrack_backend._register_user(self._data['modUser'])
+
     def __repr__(self):
         cls = self.__class__.__name__
         modname = self._data['modUser']['username']
@@ -208,6 +247,10 @@ class DubtrackUnSetRole(DubtrackEvent):
 class DubtrackUserUpdate(DubtrackEvent):
     _data_type = 'user_update'
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dubtrack_backend._register_user(self._data['user'])
+
     def __repr__(self):
         cls = self.__class__.__name__
         user = self._data['user']
@@ -222,9 +265,11 @@ class DubtrackUserUpdate(DubtrackEvent):
 # Dubtrack bot plugin
 
 class DubtrackBotBackend(Backend):
+    # Official Bot methods
     def __init__(self):
         self.dubtrackws = DubtrackWS()
         self.dubtrack_channel = None
+        self.dubtrack_entities = defaultdict(dict)  # ID: user_session_info
 
     def configure(self, *, username=None, password=None):
         if any((username, password)):
@@ -252,6 +297,20 @@ class DubtrackBotBackend(Backend):
                 event = DubtrackEvent.from_data(data, self)
             event.channel = self.dubtrack_channel
             yield event
+
+    # Internal data tracking methods
+    def _register_user(self, user_data):
+        pprint.pprint(user_data)
+        if 'userInfo' in user_data:
+            self.dubtrack_entities[user_data['userInfo']['userid']].update({
+                'username': user_data['username'],
+                'created': user_data['created'] / 1000,
+            })
+        elif 'userid' in user_data:  # TODO user-queue
+            self.dubtrack_entities[user_data['userid']].update({
+                'dubs': user_data['dubs'],
+                'playedCount': user_data['playedCount'],
+            })
 
 
 # Dubtrack dirty binding
@@ -1007,30 +1066,75 @@ class DubtrackWS:
                 #                        '_id': '5628edc08d7d6a5600335d3e',
                 #                        'userid': '5628edc08d7d6a5600335d3d'},
                 #           'username': 'iCel'},
-                #     'user_queue': {'__v': 0,
-                #                    '_id': '5628ededa2d0f81300edc39a',
-                #                    '_user': '5628edc08d7d6a5600335d3d',
-                #                    'active': True,
-                #                    'authorized': True,
-                #                    'dubs': 25899,
-                #                    'order': 99999,
-                #                    'ot_token': None,
-                #                    'playedCount': 23897,
-                #                    'queuePaused': None,
-                #                    'roleid': '5615fa9ae596154a5c000000',
-                #                    'roomid': '561b1e59c90a9c0e00df610b',
-                #                    'skippedCount': 0,
-                #                    'songsInQueue': 31,
-                #                    'updated': 1518783663567,
-                #                    'userid': '5628edc08d7d6a5600335d3d',
-                #                    'waitLine': 0}}
+                # 'user_queue': {'__v': 0,
+                #                '_id': '5628ededa2d0f81300edc39a',
+                #                '_user': '5628edc08d7d6a5600335d3d',
+                #                'active': True,
+                #                'authorized': True,
+                #                'dubs': 25899,
+                #                'order': 99999,
+                #                'ot_token': None,
+                #                'playedCount': 23897,
+                #                'queuePaused': None,
+                #                'roleid': '5615fa9ae596154a5c000000',
+                #                'roomid': '561b1e59c90a9c0e00df610b',
+                #                'skippedCount': 0,
+                #                'songsInQueue': 31,
+                #                'updated': 1518783663567,
+                #                'userid': '5628edc08d7d6a5600335d3d',
+                #                'waitLine': 0}}
 
-                # TODO: Explore user_queue.songsInQueue
-                username = content['user']['username']
-                userid = content['user']['userInfo']['userid']
+                # OR
 
-                logger_layer3.debug(
-                    f'User {username}#{userid} stopped playlist')
+                # {'type': 'user-pause-queue',
+                #  'user': {'__v': 0,
+                #           '_id': '560b135c7ae1ea0300869b20',
+                #           'created': 1443566427591,
+                #           'dubs': 0,
+                #           'profileImage': {'bytes': 444903,
+                #                            'etag': '09da0f0c34e6ddf6eb75516ea66e17bc',
+                #                            'format': 'gif',
+                #                            'height': 245,
+                #                            'overwritten': True,
+                #                            'pages': 22,
+                #                            'public_id': 'user/560b135c7ae1ea0300869b20',
+                #                            'resource_type': 'image',
+                #                            'secure_url':
+                #
+                # 'https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                            'tags': [],
+                #                            'type': 'upload',
+                #                            'url':
+                #
+                # 'http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                            'version': 1486657178,
+                #                            'width': 245},
+                #           'roleid': 1,
+                #           'status': 1,
+                #           'username': 'txomon'},
+                #  'user_queue': {'__v': 0,
+                #                 '_id': '5628db0a3883a45600b7e68f',
+                #                 '_user': '560b135c7ae1ea0300869b20',
+                #                 'active': True,
+                #                 'authorized': True,
+                #                 'dubs': 376,
+                #                 'order': 99999,
+                #                 'ot_token': None,
+                #                 'playedCount': 1680,
+                #                 'queuePaused': None,
+                #                 'roleid': '52d1ce33c38a06510c000001',
+                #                 'roomid': '561b1e59c90a9c0e00df610b',
+                #                 'skippedCount': 0,
+                #                 'songsInQueue': 0,
+                #                 'updated': 1519080836290,
+                #                 'userid': '560b135c7ae1ea0300869b20',
+                #                 'waitLine': 0}}
+
+                # TODO: Correct for both posibilities
+                #username = content['user']['username']
+                # juserid = content['user']['userInfo']['userid']
+
+                # logger_layer3.debug( f'User {username}#{userid} stopped playlist')
             elif content_type == 'user-setrole':
                 # {'modUser': {'__v': 0,
                 #              '_id': '560b135c7ae1ea0300869b20',

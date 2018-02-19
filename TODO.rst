@@ -22,20 +22,21 @@ Part of this work is not only to glue the doings of click to the library, but
 also to provide a way to match the initial name.
 
 
-Backend plugin
---------------
+Dubtrack datamodel corrections
+------------------------------
 
-Because it's now multibackend, we need to figure out a way to register the
-backends and make them work separately from the bot, sending the bot events
-in some way. Or at least to make the bot run them.
+Right now there are some simplifications that have been done in the data model
+and there is a need to value how important they are.
 
-Need to figure out how to do the addressing to them, and need to find a way
-to abstract the inner-workings of each backend to the client.
+ 1. Dubtrack backend only works on one channel at once. Therefore multiple
+ dubtrack backends need to be specified if it's desired to have more than one
+ room
 
-We also need to find a way to provide configuration to the backends.
+ 2. Using 1., it has been assumed that the user-queue is the user, therefore
+ all the stats of the queue (dubs, playedtimes) are assumed to be from the
+ user, Need to value if it's worth the refactoring
 
-Get ideas from Mopidy maybe https://www.mopidy.com/
+ 3. The code is extremely unclean and overlapped on the binding part, it
+ needs restructuring and documentation of the process that is to be followed,
+ it also lacks many functions to make actions.
 
-Related to this, need to extend the base models to support most of the
-features from any backend. Slack is the most challenging because you can
-generate subthreads in a message, where people can interact with each other.
