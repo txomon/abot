@@ -4,7 +4,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 from setuptools import find_packages, setup
 
 setup(
-    name='slackery',
+    name='abot',
     version='0.0.1a',
     description='Slack bot creation library',
     long_description=open('README.rst').read(),
