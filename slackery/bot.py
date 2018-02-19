@@ -3,33 +3,54 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
 import logging
-import re
-import shlex
 from asyncio.events import AbstractEventLoop
 from inspect import iscoroutinefunction
-
-from slackery.http import SlackAPI
 
 logger = logging.getLogger(__name__)
 
 
-class Entity:
+class Backend:
+    pass
+
+
+class BotObject:
+    @property
+    def bot(self) -> Bot:
+        raise NotImplementedError()
+
+    @property
+    def backend(self) -> Backend:
+        raise NotImplementedError()
+
+
+class Channel(BotObject):
+    async def say(self, text: str, to: str = None):
+        # Say something in the same channel as the message
+        raise NotImplementedError()
+
+
+class Entity(BotObject):
     async def tell(self, text: str, to: str = None):
         # Say something to the sender
         raise NotImplementedError()
 
 
-class Event:
+class Event(BotObject):
     @property
     def sender(self) -> Entity:
         # Return the entity that sent this
+        raise NotImplementedError()
+
+    @property
+    def channel(self) -> Channel:
+        # Return the channel used to send the Event
         raise NotImplementedError()
 
     async def say(self, text: str, to: str = None):
         # Say something in the same channel as the message
         raise NotImplementedError()
 
-    async def reply(self, text: str, to: str = None)
+    async def reply(self, text: str, to: str = None):
         # Reply to the message mentioning if possible
         raise NotImplementedError()
 
@@ -40,7 +61,7 @@ class Event:
 
 class MessageEvent(Event):
     @property
-    def text(self):
+    def text(self) -> str:
         # Return the content of the message in plaintext
         raise NotImplementedError()
 
@@ -68,35 +89,6 @@ class Bot:
         assert iscoroutinefunction(
             func), f'Handler for {rexpression} needs to be coroutine ({func.__name__})'
         self.commands[rexpression] = func
-
-    async def _handle_message(self, event: MessageEvent):
-        already_matched = False
-        try:
-            tokens = tokenize_event(event=event)
-        except ValueError as e:
-            error_string = e.args[0]
-            await event.say(error_string)
-            return
-
-        for command, operator in get_commands_from_tokens(tokens=tokens):
-            for expression, func in self.commands.items():
-                expression = expression.format(**self.expression_values)
-                message = ' '.join(command)
-                message_match = match(expression=expression, message=message)
-                if not message_match:
-                    logger.debug(
-                        f'Text `{message}` didn\'t match `{expression}`')
-                    continue
-                if already_matched:
-                    logger.warning(
-                        f'Skipping already executed {message} (Would have been {func})')
-                    continue
-                already_matched = True
-                event.matches = message_match.groupdict()
-                logger.debug(f'Executing {event} in {func}')
-                self.run_event(func=func, event=event)
-            else:
-                logger.debug(f'No matching {event}')
 
     async def _handle_event(self, event: Event):
         if not isinstance(event, MessageEvent):

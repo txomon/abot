@@ -1,14 +1,15 @@
-import sqlalchemy as sa
 import asyncio
 import datetime
-import pprint
-import aiohttp
-import logging
-import string
-import random
 import json
+import logging
+import pprint
+import random
+import string
 import time
 from collections import defaultdict
+
+import aiohttp
+import sqlalchemy as sa
 from yarl import URL
 
 AIO_SESSION = None
@@ -85,9 +86,11 @@ class DubtrackWS:
         #                             'overwritten': True,
         #                             'placeholder': False,
         #                             'resource_type': 'image',
-        #                             'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1510175888/user/56097db281c87803009bd1c5.jpg',
+        #                             'secure_url':
+        # 'https://res.cloudinary.com/hhberclba/image/upload/v1510175888/user/56097db281c87803009bd1c5.jpg',
         #                             'type': 'upload',
-        #                             'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1510175888/user/56097db281c87803009bd1c5.jpg',
+        #                             'url':
+        # 'http://res.cloudinary.com/hhberclba/image/upload/v1510175888/user/56097db281c87803009bd1c5.jpg',
         #                             'version': 1510175888,
         #                             'width': 500},
         #            'roleid': 1,
@@ -101,10 +104,12 @@ class DubtrackWS:
         #                 'height': 1200,
         #                 'public_id': 'kealmtphavj32zsshcsd',
         #                 'resource_type': 'image',
-        #                 'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1446588169/kealmtphavj32zsshcsd.jpg',
+        #                 'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1446588169
+        # /kealmtphavj32zsshcsd.jpg',
         #                 'tags': [],
         #                 'type': 'upload',
-        #                 'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1446588169/kealmtphavj32zsshcsd.jpg',
+        #                 'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1446588169/kealmtphavj32zsshcsd
+        # .jpg',
         #                 'version': 1446588169,
         #                 'width': 1920},
         #  'created': 1444617817050,
@@ -202,10 +207,12 @@ class DubtrackWS:
         #                              'pages': 4,
         #                              'public_id': 'user/56a80c626894b9410067b716',
         #                              'resource_type': 'image',
-        #                              'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1477307984/user/56a80c626894b9410067b716.gif',
+        #                              'secure_url':
+        # 'https://res.cloudinary.com/hhberclba/image/upload/v1477307984/user/56a80c626894b9410067b716.gif',
         #                              'tags': [],
         #                              'type': 'upload',
-        #                              'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1477307984/user/56a80c626894b9410067b716.gif',
+        #                              'url':
+        # 'http://res.cloudinary.com/hhberclba/image/upload/v1477307984/user/56a80c626894b9410067b716.gif',
         #                              'version': 1477307984,
         #                              'width': 325},
         #             'roleid': 1,
@@ -292,7 +299,7 @@ class DubtrackWS:
         while True:
             logger_layer1.debug('Sending ping')
             await self.ws_send(self.PING)
-            await asyncio.sleep(interval/1000)
+            await asyncio.sleep(interval / 1000)
 
     async def send_room_subscription(self):
         if not self.room_info or not self.room_info.get('_id'):
@@ -317,8 +324,7 @@ class DubtrackWS:
         if not self.heartbeat:
             # Just harcoding, not important
             self.heartbeat = asyncio.ensure_future(self.do_heartbeat(25000))
-        if not self.ws_client_id:
-            await self.send_room_subscription()
+        await self.send_room_subscription()
         await self.send_presence_update()
 
     async def ws_api_consume(self):
@@ -356,7 +362,8 @@ class DubtrackWS:
                 client_id = presence.get('clientId')
                 if 'reqId' in data and connection_id != self.connection_id:
                     logger_layer2.error(
-                        f'Presence packet says connectionId {connection_id} instead of {self.connection_id}. Ignoring..?')
+                        f'Presence packet says connectionId {connection_id} instead of {self.connection_id}. '
+                        f'Ignoring..?')
                     continue
                 if action == 0:
                     logger_layer2.debug(
@@ -593,7 +600,8 @@ class DubtrackWS:
                 songs_in_queue = user['songsInQueue']
                 dubs = user['dubs']
                 logger_layer3.debug(
-                    f'User updated {userid}, skip {skipped_count}, played {played_count}, queue {songs_in_queue}, dubs {dubs}')
+                    f'User updated {userid}, skip {skipped_count}, played {played_count}, queue {songs_in_queue}, '
+                    f'dubs {dubs}')
             elif content_type == 'room_playlist-update':
                 # {'startTime': -1,
                 #  'song': {'_id': '5a853a0a07f061010053d3c8',
@@ -655,10 +663,12 @@ class DubtrackWS:
                 #                               'pages': 22,
                 #                               'public_id': 'user/560b135c7ae1ea0300869b20',
                 #                               'resource_type': 'image',
-                #                               'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                               'secure_url':
+                # 'https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
                 #                               'tags': [],
                 #                               'type': 'upload',
-                #                               'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                               'url':
+                # 'http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
                 #                               'version': 1486657178,
                 #                               'width': 245},
                 #              'roleid': 1,
@@ -697,7 +707,8 @@ class DubtrackWS:
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']
                 logger_layer3.debug(
-                    'User {modname}#{modid} removed from role {role}/{roletype}({", ".join(rights)}) by {username}#{userid}')
+                    'User {modname}#{modid} removed from role {role}/{roletype}({", ".join(rights)}) by {username}#{'
+                    'userid}')
             elif content_type == 'user-setrole':
                 # {'modUser': {'__v': 0,
                 #              '_id': '560b135c7ae1ea0300869b20',
@@ -711,10 +722,12 @@ class DubtrackWS:
                 #                               'pages': 22,
                 #                               'public_id': 'user/560b135c7ae1ea0300869b20',
                 #                               'resource_type': 'image',
-                #                               'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                               'secure_url':
+                # 'https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
                 #                               'tags': [],
                 #                               'type': 'upload',
-                #                               'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
+                #                               'url':
+                # 'http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user/560b135c7ae1ea0300869b20.gif',
                 #                               'version': 1486657178,
                 #                               'width': 245},
                 #              'roleid': 1,
@@ -753,7 +766,8 @@ class DubtrackWS:
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']
                 logger_layer3.debug(
-                    'User {modname}#{modid} moved to role {role}/{roletype}({", ".join(rights)}) by {username}#{userid}')
+                    'User {modname}#{modid} moved to role {role}/{roletype}({", ".join(rights)}) by {username}#{'
+                    'userid}')
             else:
                 logger_layer3.info(
                     f'Received unknown message {content_type}: {pprint.pformat(content)}')
@@ -784,7 +798,7 @@ async def download_all_songs():
             await asyncio.sleep(60)
             break
         played = entries[0]['played']
-        playtime = datetime.datetime.fromtimestamp(played/1000)
+        playtime = datetime.datetime.fromtimestamp(played / 1000)
 
         for entry in entries:
             try:
@@ -820,6 +834,18 @@ def get_engine():
 def create_sqlite_db():
     engine = get_engine()
     metadata.create_all(engine)
+
+
+async def test():
+    for n in range(1000):
+        yield n
+        await asyncio.sleep(0.2)
+
+
+async def probe():
+    t1, t2 = test(), test()
+    async for ready, done in any(t1, t2):
+        print(ready, done)
 
 
 if __name__ == '__main__':
