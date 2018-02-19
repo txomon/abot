@@ -17,17 +17,13 @@ Songs = sa.Table('song_history', metadata,
                  )
 
 
-class DubtrackBot:
-    pass
-
-
 async def download_all_songs():
     dws = DubtrackWS()
     engine = get_engine()
     conn = engine.connect()
     with open('last_page') as fd:
         last_page = int(fd.read())
-    await dws.get_room_info()
+    await dws.get_room_id()
     insert_clause = Songs.insert()
     while True:
         logger.info(f'Doing page {last_page}')

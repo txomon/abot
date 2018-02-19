@@ -12,13 +12,22 @@ logger = logging.getLogger(__name__)
 
 
 class Backend:
-    pass
+    async def consume(self):
+        raise NotImplementedError()
 
 
 class BotObject:
     @property
     def bot(self) -> Bot:
-        raise NotImplementedError()
+        if hasattr(self, '_bot'):
+            return self._bot
+        raise ValueError('Bot is not set in BotObject')
+
+    @bot.setter
+    def bot(self, bot: Bot):
+        if hasattr(self, '_bot'):
+            raise ValueError(f'Bot {self._bot} is in place, cannot replace with {bot}')
+        self._bot = bot
 
     @property
     def backend(self) -> Backend:
@@ -26,13 +35,13 @@ class BotObject:
 
 
 class Channel(BotObject):
-    async def say(self, text: str, to: str = None):
+    async def say(self, text: str):
         # Say something in the same channel as the message
         raise NotImplementedError()
 
 
 class Entity(BotObject):
-    async def tell(self, text: str, to: str = None):
+    async def tell(self, text: str):
         # Say something to the sender
         raise NotImplementedError()
 
@@ -48,16 +57,8 @@ class Event(BotObject):
         # Return the channel used to send the Event
         raise NotImplementedError()
 
-    async def say(self, text: str, to: str = None):
-        # Say something in the same channel as the message
-        raise NotImplementedError()
-
-    async def reply(self, text: str, to: str = None):
+    async def reply(self, text: str):
         # Reply to the message mentioning if possible
-        raise NotImplementedError()
-
-    async def tell(self, text: str, to: str = None):
-        # Say something to the sender directly if possible
         raise NotImplementedError()
 
 
@@ -73,11 +74,11 @@ class Bot:
         self.backends = {}
         self.event_handlers = {}
 
-    def attach_backend(self, backend):
+    def attach_backend(self, backend: Backend):
         if backend in self.backends:
             raise ValueError(f'Backend {backend} is already attached to bot')
-        iterator = getattr(backend, 'consume')
-        self.backends[backend] = iterator()
+        iterator = backend.consume()
+        self.backends[backend] = iterator
 
     def _handle_message(self, message):
         raise NotImplementedError()
@@ -85,7 +86,7 @@ class Bot:
     def add_event_handler(self, event_class, *, func=None):
         def wrapper(f):
             assert asyncio.iscoroutinefunction(
-                func), f'Handler for {rexpression} needs to be coroutine ({func.__name__})'
+                func), f'Handler for {event_class} needs to be coroutine ({func})'
             if event_class in self.event_handlers:
                 raise ValueError(
                     f'Event handler for {event_class} is already registered on {self.event_handlers[event_class]}')

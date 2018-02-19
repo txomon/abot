@@ -8,15 +8,92 @@ import random
 import string
 import time
 from collections import defaultdict
+from urllib.parse import urlencode
 
 import aiohttp
 from yarl.__init__ import URL
+
+from abot.bot import Backend, BotObject, Channel, Entity, Event, MessageEvent
 
 logger = logging.getLogger('dubtrack')
 logger_layer1 = logging.getLogger('dubtrack.layer1')
 logger_layer2 = logging.getLogger('dubtrack.layer2')
 logger_layer3 = logging.getLogger('dubtrack.layer3')
 
+
+# Dubtrack specific objects
+class DubtrackObject(BotObject):
+    def __init__(self, data, dubtrack_backend: DubtrackBotBackend):
+        self._data = data
+        self._dubtrack_backend = dubtrack_backend
+
+
+class DubtrackChannel(DubtrackObject, Channel):
+    async def say(self, text: str):
+        await self._dubtrack_backend.dubtrackws.say_in_room(text)
+
+
+class DubtrackEntity(DubtrackObject, Entity):
+    async def tell(self, text: str):
+        pass
+
+
+class DubtrackEvent(DubtrackObject, Event):
+    _data_type = ''
+
+    @classmethod
+    def from_data(cls, data, dubtrack_backend: DubtrackBotBackend):
+        for cl in cls.__subclasses__():
+            if cl._data_type == data['type']:
+                return cl(data, dubtrack_backend)
+        else:
+            return cls(data, dubtrack_backend)
+
+    @property
+    def sender(self) -> DubtrackEntity:
+        return None
+
+    @property
+    def channel(self) -> DubtrackChannel:
+        # Return the channel used to send the Event
+        if hasattr(self, '_channel'):
+            return self._channel
+        raise ValueError('Channel is not set')
+
+    @channel.setter
+    def channel(self, channel: DubtrackChannel):
+        if hasattr(self, '_channel'):
+            raise ValueError(f'Channel {self._channel} is in place, cannot replace with {channel}')
+        self._channel = channel
+
+    async def reply(self, text: str, to: str = None):
+        # Reply to the message mentioning if possible
+        raise NotImplementedError()
+
+
+class DubtrackMessage(DubtrackEvent, MessageEvent):
+    @property
+    def text(self):
+        return self._data['message']
+
+
+# Dubtrack bot plugin
+
+class DubtrackBotBackend(Backend):
+    def __init__(self, room='master-of-soundtrack'):
+        self.dubtrackws = DubtrackWS(room=room)
+        self.dubtrack_channel = None
+
+    async def consume(self):
+        await self.dubtrackws.get_room_id()
+        self.dubtrack_channel = DubtrackChannel(self.dubtrackws.room_info, self)
+        async for data in self.dubtrackws.ws_api_consume():
+            event = DubtrackEvent.from_data(data, self)
+            event.channel = self.dubtrack_channel
+            yield event
+
+
+# Dubtrack dirty binding
 
 def gen_request_id():
     return ''.join(random.choices(string.ascii_letters + string.digits, k=44))
@@ -37,11 +114,62 @@ class DubtrackWS:
         self.connection_id = None
         self.connected_clients = defaultdict(set)
         self.aio_session = aiohttp.ClientSession()
+        self.user_session_info = None
+
+    async def api_post(self, url, body):
+        async with self.aio_session.post(url, json=body) as resp:
+            response = await resp.json()
+        return response['data']
 
     async def api_get(self, url):
         async with self.aio_session.get(url) as resp:
             response = await resp.json()
         return response['data']
+
+    async def get_user_session_info(self):
+        if not self.user_session_info:
+            self.user_session_info = await self.api_get('https://api.dubtrack.fm/auth/session')
+        return self.user_session_info
+
+    async def get_user_role(self):
+        if not self.room_user_info:
+            room_id = await self.get_room_id()
+            self.room_user_info = await self.api_post(f'https://api.dubtrack.fm/room/{room_id}/users', None)
+        return self.room_user_info['roleid']['type']
+
+    async def say_in_room(self, text):
+        # {"message": "pfff",
+        #  "type": "chat-message",
+        #  "chatid": None,
+        #  "user": {"username": "txomon",
+        #           "status": 1,
+        #           "roleid": 1,
+        #           "dubs": 0,
+        #           "created": 1443566427591,
+        #           "lastLogin": 0,
+        #           "userInfo": {"_id": "560b135c7ae1ea0300869b21",
+        #                        "userid": "560b135c7ae1ea0300869b20",
+        #                        "__v": 0},
+        #           "_force_updated": 1519046263690,
+        #           "_id": "560b135c7ae1ea0300869b20",
+        #           "__v": 0},
+        #  "time": 1519047206095,
+        #  "realTimeChannel": "dubtrackfm-master-of-soundtrack",
+        #  "userRole": "mod"}
+
+        body = {'chatid': None,
+                'message': text,
+                'time': int(time.time() * 1000),
+                'type': 'chat-message',
+                'user': self.user_session_info,
+                'userRole': self.get_user_role(), }
+        room_id = await self.get_room_id()
+        response = await self.aio_session.post(f'https://api.dubtrack.fm/chat/{room_id}')
+        return response
+
+    async def login(self, username, password):
+        data = urlencode({'username': username, 'password': password})
+        await self.aio_session.post('https://api.dubtrack.fm/auth/dubtrack', data=data)
 
     async def get_token(self):
         # {'action': 17,
@@ -51,7 +179,7 @@ class DubtrackWS:
         response = await self.api_get('https://api.dubtrack.fm/auth/token')
         return response['token']
 
-    async def get_room_info(self):
+    async def get_room_id(self):
         # {'__v': 0,
         #  '_id': '561b1e59c90a9c0e00df610b',
         #  '_user': {'__v': 0,
@@ -148,17 +276,16 @@ class DubtrackWS:
         #            'avoid those songs: http://mos.rf.gd/overplayed.html\n'
         #            'Visit us on FB: http://xurl.es/hncih , next NTT: '
         #            'http://xurl.es/3u71y'}
-
-        response = await self.api_get(f'https://api.dubtrack.fm/room/{self.room}')
-        self.room_info = response
-        return response
+        if not self.room_info:
+            self.room_info = await self.api_get(f'https://api.dubtrack.fm/room/{self.room}')
+        return self.room_info['_id']
 
     async def get_active_song(self):
-        room_id = self.room_info['_id']
+        room_id = await self.get_room_id()
         return await self.api_get(f'https://api.dubtrack.fm/room/{room_id}/playlist/active')
 
     async def get_users(self):
-        room_id = self.room_info['_id']
+        room_id = await self.get_room_id()
         return await self.api_get(f'https://api.dubtrack.fm/room/{room_id}/users')
 
     async def get_user(self, user_id):
@@ -209,7 +336,7 @@ class DubtrackWS:
         #     'songid': '5795e51c828c22790037db1e',
         #     'updubs': 2,
         #     'userid': '56a80c626894b9410067b716'}]
-        room_id = self.room_info['_id']
+        room_id = await self.get_room_id()
         url = URL(f'https://api.dubtrack.fm/room/{room_id}/playlist/history')
         if page:
             url = url.with_query({'page': page})
@@ -217,7 +344,6 @@ class DubtrackWS:
 
     async def raw_ws_consume(self):
         last_token_fail = last_consume_fail = 0
-        await self.get_room_info()
         while True:  # two tries per level
             try:
                 token = await self.get_token()
@@ -281,20 +407,18 @@ class DubtrackWS:
             await asyncio.sleep(interval / 1000)
 
     async def send_room_subscription(self):
-        if not self.room_info or not self.room_info.get('_id'):
-            await self.get_room_info()
+        room_id = await self.get_room_id()
         subscription = {
             'action': 10,
-            "channel": f'room:{self.room_info["_id"]}',
+            "channel": f'room:{room_id}',
         }
         await self.ws_send(f'4{json.dumps(subscription)}')
 
     async def send_presence_update(self):
-        if not self.room_info or not self.room_info.get('_id'):
-            await self.get_room_info()
+        room_id = await self.get_room_id()
         presence_update = {
             "action": 14,
-            "channel": f'room:{self.room_info["_id"]}',
+            "channel": f'room:{room_id}',
             "presence": {"action": 0, "data": {}},
             "reqId": gen_request_id()}
         await self.ws_send(f'4{json.dumps(presence_update)}')
@@ -478,7 +602,7 @@ class DubtrackWS:
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']
                 # TODO: Explore roomUser
-                logger_layer3.debug(f'User {username}{userid} joined')
+                logger_layer3.debug(f'User {username}#{userid} joined')
             elif content_type == 'user-pause-queue':
                 # {'type': 'user-pause-queue',
                 #  'user': {'__v': 0,
@@ -751,3 +875,4 @@ class DubtrackWS:
             else:
                 logger_layer3.info(
                     f'Received unknown message {content_type}: {pprint.pformat(content)}')
+            yield content
