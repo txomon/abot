@@ -98,6 +98,10 @@ def run_bot():
     # Setup
     bot = Bot()
     dubtrack_backend = DubtrackBotBackend()
+    with open('credentials.json') as f:
+        config = json.load(f)
+
+    dubtrack_backend.configure(**config)
     bot.attach_backend(backend=dubtrack_backend)
 
     bot.add_event_handler(DubtrackMessage, func=message_handler)
