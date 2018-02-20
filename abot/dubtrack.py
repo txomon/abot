@@ -257,7 +257,6 @@ class DubtrackPlaying(DubtrackEvent):
 
     def __repr__(self):
         cls = self.__class__.__name__
-        songinfo = self._data['songInfo']
         name = self.song_name
         songtype = self.song_type
         songfkid = self.song_external_id
@@ -282,8 +281,12 @@ class DubtrackPlaying(DubtrackEvent):
         return self._data['song']['songid']
 
     @property
-    def song_length(self):
-        return self._data['songInfo']['songLength']
+    def length(self):
+        return self._data['songInfo']['songLength'] / 1000
+
+    @property
+    def played(self):
+        return self._data['song']['played'] / 1000
 
 
 class DubtrackJoin(DubtrackEvent):

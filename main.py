@@ -46,8 +46,8 @@ async def download_all_songs():
         playtime = datetime.datetime.fromtimestamp(played / 1000)
 
         for entry in entries:
+            trans = conn.begin()
             try:
-                trans = conn.begin()
                 conn.execute(
                     insert_clause,
                     played=entry['played'],
@@ -84,7 +84,7 @@ def create_sqlite_db():
 async def playing_handler(ev: DubtrackPlaying):
     print(f'{id(ev)} Handling in playing_handler')
     played_ts = ev._data['song']['played'] / 1000
-    song_length_ts = ev.song_length / 1000
+    song_length_ts = ev.length / 1000
     played = datetime.datetime.fromtimestamp(played_ts)
     ending = datetime.datetime.fromtimestamp(played_ts + song_length_ts)
     print(f'Playing {played} + {song_length_ts} = {ending}: {ev.song_name}')
@@ -128,7 +128,7 @@ def run_bot():
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
     logging.getLogger('abot.dubtrack').setLevel(logging.WARNING)
     logging.getLogger('abot.dubtrack.layer1').setLevel(logging.WARNING)
     logging.getLogger('abot.dubtrack.layer2').setLevel(logging.WARNING)
