@@ -7,6 +7,8 @@ import logging
 from asyncio.events import AbstractEventLoop
 from typing import List, Optional
 
+from collections import defaultdict
+
 from abot.util import iterator_merge
 
 logger = logging.getLogger(__name__)
@@ -94,13 +96,21 @@ class MessageEvent(Event):
 class Bot:
     def __init__(self):
         self.backends = {}
-        self.event_handlers = {}
+        self.event_handlers = defaultdict(set)
 
     def attach_backend(self, backend: Backend):
         if backend in self.backends:
             raise ValueError(f'Backend {backend} is already attached to bot')
-        iterator = backend.consume()
+        iterator = self.backend_consume(backend)
         self.backends[backend] = iterator
+
+    async def backend_consume(self, backend):
+        while True:
+            try:
+                async for event in backend.consume():
+                    yield event
+            except:
+                logger.exception(f'Exception in {backend} handled')
 
     def _handle_message(self, message):
         raise NotImplementedError()
@@ -109,10 +119,7 @@ class Bot:
         def wrapper(f):
             assert asyncio.iscoroutinefunction(
                 func), f'Handler for {event_class} needs to be coroutine ({func})'
-            if event_class in self.event_handlers:
-                raise ValueError(
-                    f'Event handler for {event_class} is already registered on {self.event_handlers[event_class]}')
-            self.event_handlers[event_class] = f
+            self.event_handlers[f].add(event_class)
             return f
 
         if func is None:
@@ -121,20 +128,22 @@ class Bot:
             wrapper(func)
 
     async def _handle_event(self, event: Event):
+        # Same event can be handled multiple times, Messages only once
+
         # TODO: Generate _handle_message
         # if isinstance(event, MessageEvent):
         #     logger.debug(f'Message event {event} handling as message')
         #     self._handle_message(event)
-        #     return
+        runs = 0
         for cls in inspect.getmro(event.__class__):
-            handler = self.event_handlers.get(cls)
-            if handler:
-                break
-        else:
-            logger.warning(f'No message handler for {event}')
-            return
-        logger.debug(f'Handling {event} with <{handler.__name__}>')
-        await self.run_event(handler, event)
+            for handler, handled_classes in self.event_handlers.items():
+                if cls not in handled_classes:
+                    continue
+                logger.debug(f'Handling {event} with <{handler.__name__}>')
+                asyncio.ensure_future(self.run_event(handler, event))
+                runs += 1
+        if not runs:
+            logger.debug(f'No message handler for {event}')
 
     async def run_forever(self):
         continue_running = True
@@ -145,7 +154,7 @@ class Bot:
         while continue_running:
             try:
                 async for event in iterator_merge(*self.backends.values()):
-                    asyncio.ensure_future(self._handle_event(event=event))
+                    await self._handle_event(event=event)
             except Exception as e:
                 continue_running = await self.internal_exception_handler(e)
 

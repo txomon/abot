@@ -2,11 +2,12 @@ import asyncio
 import datetime
 import json
 import logging
+import time
 
 import sqlalchemy as sa
 
 from abot.bot import Bot, Event
-from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackWS
+from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackPlaying, DubtrackWS
 
 logger = logging.getLogger()
 
@@ -80,18 +81,30 @@ def create_sqlite_db():
     metadata.create_all(engine)
 
 
-events = list()
-entities = list()
+async def playing_handler(ev: DubtrackPlaying):
+    print(f'{id(ev)} Handling in playing_handler')
+    played_ts = ev._data['song']['played'] / 1000
+    song_length_ts = ev.song_length / 1000
+    played = datetime.datetime.fromtimestamp(played_ts)
+    ending = datetime.datetime.fromtimestamp(played_ts + song_length_ts)
+    print(f'Playing {played} + {song_length_ts} = {ending}: {ev.song_name}')
+    now = time.time()
+    await asyncio.sleep(played_ts + song_length_ts - now)
+    print(f'Song should be finishing now')
+
+
+async def other_event_handler(ev: Event):
+    print(f'{id(ev)} Handling in other_event_handler')
 
 
 async def event_handler(ev: Event):
-    events.append(ev)
-    entities.append(ev.sender)
+    print(f'{id(ev)} Handling in event_handler')
 
 
-async def message_handler(message: DubtrackMessage):
-    print(f'Received {message.text}')
-    # await message.channel.say('Bot speaking here')
+async def message_handler(ev: DubtrackMessage):
+    print(f'{id(ev)} Handling in message_handler')
+    # print(f'Received {ev.text}')
+    # await ev.channel.say('Bot speaking here')
 
 
 def run_bot():
@@ -101,11 +114,13 @@ def run_bot():
     with open('credentials.json') as f:
         config = json.load(f)
 
-    dubtrack_backend.configure(**config)
+    # dubtrack_backend.configure(**config)
     bot.attach_backend(backend=dubtrack_backend)
 
-    bot.add_event_handler(DubtrackMessage, func=message_handler)
     bot.add_event_handler(Event, func=event_handler)
+    bot.add_event_handler(Event, func=other_event_handler)
+    bot.add_event_handler(DubtrackMessage, func=message_handler)
+    bot.add_event_handler(DubtrackPlaying, func=playing_handler)
 
     # Run
     loop = asyncio.get_event_loop()
@@ -114,7 +129,7 @@ def run_bot():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    logging.getLogger('abot.dubtrack').setLevel(logging.DEBUG)
+    logging.getLogger('abot.dubtrack').setLevel(logging.WARNING)
     logging.getLogger('abot.dubtrack.layer1').setLevel(logging.WARNING)
     logging.getLogger('abot.dubtrack.layer2').setLevel(logging.WARNING)
     logging.getLogger('abot.dubtrack.layer3').setLevel(logging.WARNING)

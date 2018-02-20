@@ -258,11 +258,32 @@ class DubtrackPlaying(DubtrackEvent):
     def __repr__(self):
         cls = self.__class__.__name__
         songinfo = self._data['songInfo']
-        name = songinfo['name']
-        songtype = songinfo['type']
-        songid = songinfo['fkid']
+        name = self.song_name
+        songtype = self.song_type
+        songfkid = self.song_external_id
+        songid = self.song_id
         sender = self.sender
-        return f'<{cls} {songtype}#{songid} {sender} {name}>'
+        return f'<{cls}#{songid} {songtype}#{songfkid} {sender} {name}>'
+
+    @property
+    def song_type(self):
+        return self._data['songInfo']['type']
+
+    @property
+    def song_external_id(self):
+        return self._data['songInfo']['fkid']
+
+    @property
+    def song_name(self):
+        return self._data['songInfo']['name']
+
+    @property
+    def song_id(self):
+        return self._data['song']['songid']
+
+    @property
+    def song_length(self):
+        return self._data['songInfo']['songLength']
 
 
 class DubtrackJoin(DubtrackEvent):
@@ -409,7 +430,10 @@ class DubtrackBotBackend(Backend):
 
     async def consume(self):
         await self.dubtrackws.get_room_id()
-        self.dubtrack_channel = DubtrackChannel(self.dubtrackws.room_info, self)
+        room_info = self.dubtrackws.room_info
+        self.dubtrack_channel = DubtrackChannel(room_info, self)
+        active_song = await self.dubtrackws.get_active_song()
+        yield DubtrackPlaying(active_song, self)
         async for data in self.dubtrackws.ws_api_consume():
             if data['type'].startswith('user_update'):
                 event = DubtrackUserUpdate(data, self)
@@ -825,6 +849,32 @@ class DubtrackWS:
         return self.room_info['_id']
 
     async def get_active_song(self):
+        # {'song': {'__v': 0,
+        #           '_id': '5a8be8a5edab940100b2af20',
+        #           '_song': '583198efc2225d2e00849a5b',
+        #           '_user': '562e462b888e6f1900ff20bc',
+        #           'created': 1519118499376,
+        #           'downdubs': 0,
+        #           'isActive': True,
+        #           'isPlayed': False,
+        #           'order': 1,
+        #           'played': 1519131687972,
+        #           'roomid': '561b1e59c90a9c0e00df610b',
+        #           'skipped': False,
+        #           'songLength': 307000,
+        #           'songid': '583198efc2225d2e00849a5b',
+        #           'updubs': 2,
+        #           'userid': '562e462b888e6f1900ff20bc'},
+        #  'songInfo': {'__v': 0,
+        #               '_id': '583198efc2225d2e00849a5b',
+        #               'created': '2016-11-20T12:37:03.018Z',
+        #               'fkid': 'zoORlnu_6dk',
+        #               'images': {'thumbnail': 'https://i.ytimg.com/vi/zoORlnu_6dk/hqdefault.jpg'},
+        #               'name': 'Spain Ambient - Guitar Improv 7 (Civilization 6 OST)',
+        #               'songLength': 307000,
+        #               'type': 'youtube'},
+        #  'startTime': 65}
+
         room_id = await self.get_room_id()
         return await self.api_get(f'https://api.dubtrack.fm/room/{room_id}/playlist/active')
 
