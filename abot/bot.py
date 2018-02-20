@@ -5,7 +5,7 @@ import asyncio
 import inspect
 import logging
 from asyncio.events import AbstractEventLoop
-from typing import List, Any, Optional
+from typing import List, Optional
 
 from abot.util import iterator_merge
 
@@ -134,7 +134,7 @@ class Bot:
             logger.warning(f'No message handler for {event}')
             return
         logger.debug(f'Handling {event} with <{handler.__name__}>')
-        await handler(event)
+        await self.run_event(handler, event)
 
     async def run_forever(self):
         continue_running = True
@@ -161,7 +161,7 @@ class Bot:
 
     async def handle_bot_exception(self, func, event, exception):
         logger.exception(f'Failed running {event} in {func}')
-        await event.say(f':boom:... Houston we found a problem: ```{exception}```')
+        # await event.say(f':boom:... Houston we found a problem: ```{exception}```')
 
     def start(self, event_loop: AbstractEventLoop = None):
         return asyncio.ensure_future(self.run_forever(), loop=event_loop)

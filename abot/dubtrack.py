@@ -710,6 +710,7 @@ class DubtrackWS:
         return response
 
     async def login(self, username, password):
+        # No response, just cookie set
         data = {'username': username, 'password': password}
         async with self.aio_session.post('https://api.dubtrack.fm/auth/dubtrack', data=data) as resp:
             return resp.status == 200
