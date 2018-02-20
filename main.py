@@ -5,7 +5,7 @@ import logging
 
 import sqlalchemy as sa
 
-from abot.bot import Bot
+from abot.bot import Bot, Event
 from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackWS
 
 logger = logging.getLogger()
@@ -80,6 +80,15 @@ def create_sqlite_db():
     metadata.create_all(engine)
 
 
+events = list()
+entities = list()
+
+
+async def event_handler(ev: Event):
+    events.append(ev)
+    entities.append(ev.sender)
+
+
 async def message_handler(message: DubtrackMessage):
     print(f'Received {message.text}')
     # await message.channel.say('Bot speaking here')
@@ -89,10 +98,10 @@ def run_bot():
     # Setup
     bot = Bot()
     dubtrack_backend = DubtrackBotBackend()
-    dubtrack_backend.configure()
     bot.attach_backend(backend=dubtrack_backend)
 
     bot.add_event_handler(DubtrackMessage, func=message_handler)
+    bot.add_event_handler(Event, func=event_handler)
 
     # Run
     loop = asyncio.get_event_loop()

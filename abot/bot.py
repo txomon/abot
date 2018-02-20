@@ -5,8 +5,7 @@ import asyncio
 import inspect
 import logging
 from asyncio.events import AbstractEventLoop
-
-import aiostream
+from typing import List, Any, Optional
 
 from abot.util import iterator_merge
 
@@ -21,6 +20,9 @@ class Backend:
         raise NotImplementedError()
 
     async def consume(self):
+        raise NotImplementedError()
+
+    def whoami(self) -> Optional['Entity']:
         raise NotImplementedError()
 
 
@@ -43,6 +45,10 @@ class BotObject:
 
 
 class Channel(BotObject):
+    @property
+    async def entities(self) -> List['Entity']:
+        raise NotImplementedError()
+
     async def say(self, text: str):
         # Say something in the same channel as the message
         raise NotImplementedError()
@@ -51,6 +57,14 @@ class Channel(BotObject):
 class Entity(BotObject):
     async def tell(self, text: str):
         # Say something to the sender
+        raise NotImplementedError()
+
+    @property
+    def id(self) -> str:
+        raise NotImplementedError()
+
+    @property
+    def username(self) -> str:
         raise NotImplementedError()
 
 
