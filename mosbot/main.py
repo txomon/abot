@@ -6,7 +6,7 @@ import time
 
 from abot.bot import Bot
 from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackPlaying, DubtrackWS
-from mosbot.db import SongsHistory, get_engine
+from mosbot.db import SongsHistory, sqlite_get_engine
 
 logger = logging.getLogger()
 
@@ -14,12 +14,13 @@ logger = logging.getLogger()
 async def download_all_songs():
     dws = DubtrackWS()
     await dws.initialize()
-    engine = get_engine()
+    engine = sqlite_get_engine()
     conn = engine.connect()
     with open('last_page') as fd:
         last_page = int(fd.read())
     await dws.get_room_id()
     insert_clause = SongsHistory.insert()
+    errors_together = 0
     while True:
         logger.info(f'Doing page {last_page}')
         try:
@@ -46,11 +47,19 @@ async def download_all_songs():
                     skipped=entry['skipped'],
                 )
                 trans.commit()
+                errors_together = 0
             except Exception as e:
+                errors_together += 1
                 trans.rollback()
                 logger.info(f'Duplicate entry {entry["played"]}: {e}')
-        logger.info(f'Done page {last_page}, {playtime.isoformat()}')
-        last_page += 1
+                if errors_together > 3:
+                    break
+        else:
+            logger.info(f'Done page {last_page}, {playtime.isoformat()}')
+            last_page += 1
+            continue
+        logger.info('Amount of errors suggest we catched up')
+        break
     with open('last_page', mode='wt') as fd:
         fd.write(str(last_page))
 
