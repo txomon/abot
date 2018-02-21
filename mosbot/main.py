@@ -6,7 +6,9 @@ import time
 
 from abot.bot import Bot
 from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackPlaying, DubtrackWS
+from mosbot import config
 from mosbot.db import SongsHistory, sqlite_get_engine
+from mosbot.usecase import save_history_songs
 
 logger = logging.getLogger()
 
@@ -87,10 +89,7 @@ def mos_bot():
     # Setup
     bot = Bot()
     dubtrack_backend = DubtrackBotBackend()
-    with open('credentials.json') as f:
-        config = json.load(f)
-
-    # dubtrack_backend.configure(**config)
+    dubtrack_backend.configure(username=config.DUBTRACK_USERNAME, password=config.DUBTRACK_PASSWORD)
     bot.attach_backend(backend=dubtrack_backend)
 
     bot.add_event_handler(DubtrackMessage, func=message_handler)
@@ -105,6 +104,7 @@ def mos_history():
     logging.basicConfig(level=logging.INFO)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(download_all_songs())
+    #loop.run_until_complete(save_history_songs())
 
 
 if __name__ == '__main__':

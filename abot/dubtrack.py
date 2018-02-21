@@ -924,6 +924,37 @@ class DubtrackWS:
         return await self.api_get(f'https://api.dubtrack.fm/room/{room_id}/users')
 
     async def get_user(self, user_id):
+        # {'__v': 0,
+        #  '_id': '5628edc08d7d6a5600335d3d',
+        #  'created': 1445522880666,
+        #  'dubs': 0,
+        #  'profileImage': {
+        #      'bytes': 61889,
+        #      'etag': 'f5f398bf49c71314e865ade3c4a7bf2a',
+        #      'format': 'jpg',
+        #      'height': 455,
+        #      'overwritten': True,
+        #      'placeholder': False,
+        #      'public_id': 'user/5628edc08d7d6a5600335d3d',
+        #      'resource_type': 'image',
+        #      'secure_url': 'https://res.cloudinary.com/hhberclba/image/upload/v1508887786/user'
+        #                    '/5628edc08d7d6a5600335d3d.jpg',
+        #      'tags': [],
+        #      'type': 'upload',
+        #      'url': 'http://res.cloudinary.com/hhberclba/image/upload/v1508887786/user'
+        #             '/5628edc08d7d6a5600335d3d.jpg',
+        #      'version': 1508887786,
+        #      'width': 455
+        #  },
+        #  'roleid': 1,
+        #  'status': 1,
+        #  'userInfo': {
+        #      '__v': 0,
+        #      '_id': '5628edc08d7d6a5600335d3e',
+        #      'userid': '5628edc08d7d6a5600335d3d'
+        #  },
+        #  'username': 'iCel'
+        #  }
         return await self.api_get(f'https://api.dubtrack.fm/user/{user_id}')
 
     async def get_history(self, page=None):

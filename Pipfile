@@ -10,6 +10,7 @@ name = "pypi"
 aiohttp = "*"
 sqlalchemy = "*"
 click = "*"
+aiopg = "*"
 
 
 [dev-packages]
