@@ -4,21 +4,11 @@ import json
 import logging
 import time
 
-import sqlalchemy as sa
-
 from abot.bot import Bot
 from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackPlaying, DubtrackWS
+from mosbot.db import SongsHistory, get_engine
 
 logger = logging.getLogger()
-
-metadata = sa.MetaData()
-Songs = sa.Table('song_history', metadata,
-                 sa.Column('id', sa.Integer, primary_key=True),
-                 sa.Column('played', sa.Integer, unique=True),
-                 sa.Column('skipped', sa.Boolean),
-                 sa.Column('username', sa.Text),
-                 sa.Column('song', sa.Text),
-                 )
 
 
 async def download_all_songs():
@@ -29,7 +19,7 @@ async def download_all_songs():
     with open('last_page') as fd:
         last_page = int(fd.read())
     await dws.get_room_id()
-    insert_clause = Songs.insert()
+    insert_clause = SongsHistory.insert()
     while True:
         logger.info(f'Doing page {last_page}')
         try:
@@ -63,22 +53,6 @@ async def download_all_songs():
         last_page += 1
     with open('last_page', mode='wt') as fd:
         fd.write(str(last_page))
-
-
-ENGINE = None
-
-
-def get_engine():
-    global ENGINE
-    if ENGINE:
-        return ENGINE
-    ENGINE = sa.create_engine('sqlite:///songs.sqlite3')
-    return ENGINE
-
-
-def create_sqlite_db():
-    engine = get_engine()
-    metadata.create_all(engine)
 
 
 async def playing_handler(ev: DubtrackPlaying):
