@@ -6,11 +6,11 @@ from setuptools import find_packages, setup
 setup(
     name='abot',
     version='0.0.1a',
-    description='Slack bot creation library',
+    description='Bot creation library',
     long_description=open('README.rst').read(),
-    url='https://github.com/Ridee/slackery',
+    url='https://github.com/txomon/abot',
     author='Javier Domingo Cansino',
-    author_email='javier@jinnapp.com',
+    author_email='javierdo1@gmail.com',
     classifiers=[
         'Development Status :: 1 - Planning',
         'Intended Audience :: Developers',
@@ -22,5 +22,11 @@ setup(
     python_requires='>=3.6',
     include_package_data=True,
     zip_safe=False,
-    keywords=['slack', 'bot'],
+    keywords=['slack', 'dubtrack', 'bot', 'async'],
+    entry_points={
+        'console_scripts': [
+            'mos-bot=mosbot.main:mos_bot',
+            'mos-history=mosbot.main:mos_history',
+        ]
+    }
 )

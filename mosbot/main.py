@@ -6,7 +6,7 @@ import time
 
 import sqlalchemy as sa
 
-from abot.bot import Bot, Event
+from abot.bot import Bot
 from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackPlaying, DubtrackWS
 
 logger = logging.getLogger()
@@ -83,8 +83,8 @@ def create_sqlite_db():
 
 async def playing_handler(ev: DubtrackPlaying):
     print(f'{id(ev)} Handling in playing_handler')
-    played_ts = ev._data['song']['played'] / 1000
-    song_length_ts = ev.length / 1000
+    played_ts = ev.played
+    song_length_ts = ev.length
     played = datetime.datetime.fromtimestamp(played_ts)
     ending = datetime.datetime.fromtimestamp(played_ts + song_length_ts)
     print(f'Playing {played} + {song_length_ts} = {ending}: {ev.song_name}')
@@ -93,21 +93,14 @@ async def playing_handler(ev: DubtrackPlaying):
     print(f'Song should be finishing now')
 
 
-async def other_event_handler(ev: Event):
-    print(f'{id(ev)} Handling in other_event_handler')
-
-
-async def event_handler(ev: Event):
-    print(f'{id(ev)} Handling in event_handler')
-
-
 async def message_handler(ev: DubtrackMessage):
     print(f'{id(ev)} Handling in message_handler')
     # print(f'Received {ev.text}')
     # await ev.channel.say('Bot speaking here')
 
 
-def run_bot():
+def mos_bot():
+    logging.basicConfig(level=logging.INFO)
     # Setup
     bot = Bot()
     dubtrack_backend = DubtrackBotBackend()
@@ -117,8 +110,6 @@ def run_bot():
     # dubtrack_backend.configure(**config)
     bot.attach_backend(backend=dubtrack_backend)
 
-    bot.add_event_handler(Event, func=event_handler)
-    bot.add_event_handler(Event, func=other_event_handler)
     bot.add_event_handler(DubtrackMessage, func=message_handler)
     bot.add_event_handler(DubtrackPlaying, func=playing_handler)
 
@@ -127,15 +118,17 @@ def run_bot():
     loop.run_until_complete(bot.run_forever())
 
 
-if __name__ == '__main__':
+def mos_history():
     logging.basicConfig(level=logging.INFO)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(download_all_songs())
+
+
+if __name__ == '__main__':
     logging.getLogger('abot.dubtrack').setLevel(logging.WARNING)
     logging.getLogger('abot.dubtrack.layer1').setLevel(logging.WARNING)
     logging.getLogger('abot.dubtrack.layer2').setLevel(logging.WARNING)
     logging.getLogger('abot.dubtrack.layer3').setLevel(logging.WARNING)
     dubtrack = DubtrackWS()
-    loop = asyncio.get_event_loop()
     # loop.run_until_complete(dubtrack.ws_api_consume())
     # create_sqlite_db()
-    # loop.run_until_complete(download_all_songs())
-    run_bot()

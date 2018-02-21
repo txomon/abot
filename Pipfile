@@ -8,7 +8,8 @@ name = "pypi"
 [packages]
 
 aiohttp = "*"
-SQLAlchemy = "*"
+sqlalchemy = "*"
+click = "*"
 
 
 [dev-packages]
@@ -16,4 +17,4 @@ SQLAlchemy = "*"
 pylint = "*"
 rope = "*"
 "autopep8" = "*"
-restructuredtext_lint = "*"
+restructuredtext-lint = "*"

@@ -28,6 +28,10 @@ class DubtrackObject(BotObject):
         self._data = data
         self._dubtrack_backend = dubtrack_backend
 
+    @property
+    def backend(self):
+        return self._dubtrack_backend
+
 
 class DubtrackChannel(DubtrackObject, Channel):
     def __init__(self, *args, **kwargs):
@@ -133,7 +137,7 @@ class DubtrackEvent(DubtrackObject, Event):
 
     async def reply(self, text: str, to: str = None):
         # Reply to the message mentioning if possible
-        raise NotImplementedError()
+        return
 
     def __repr__(self):
         cls = self.__class__.__name__
