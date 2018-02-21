@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "a3abaf740c1b75ca61ce2107142f83747a8f7d7d6367164c5d0c039789fbdd9e"
+            "sha256": "63d57c4deacb446eedc6c05917f4252d162fb12c1f01d75bb71feb4436c35697"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
@@ -9,9 +9,9 @@
             "os_name": "posix",
             "platform_machine": "x86_64",
             "platform_python_implementation": "CPython",
-            "platform_release": "4.15.3-1-ARCH",
+            "platform_release": "4.15.3-2-ARCH",
             "platform_system": "Linux",
-            "platform_version": "#1 SMP PREEMPT Mon Feb 12 23:01:17 UTC 2018",
+            "platform_version": "#1 SMP PREEMPT Thu Feb 15 00:13:49 UTC 2018",
             "python_full_version": "3.6.4",
             "python_version": "3.6",
             "sys_platform": "linux"
@@ -154,11 +154,32 @@
             ],
             "version": "==2.7.4"
         },
+        "represent": {
+            "hashes": [
+                "sha256:f599094a66ec04455bb1555f3a65c78449f647a1a1bcd513775cfa64c8067400",
+                "sha256:9c12c1c60b8616f97855d3a37ea4ec60e3d5d463965a6a29b80d0b794ad4f0d8"
+            ],
+            "version": "==1.5.1"
+        },
+        "six": {
+            "hashes": [
+                "sha256:832dc0e10feb1aa2c68dcc57dbb658f1c7e65b9b61af69048abc87a2db00a0eb",
+                "sha256:70e8a77beed4562e7f14fe23a786b54f6296e34344c23bc42f07b15018ff98e9"
+            ],
+            "version": "==1.11.0"
+        },
         "sqlalchemy": {
             "hashes": [
                 "sha256:9e9ec143e2e246f385cfb2de8daa89d2fa466279addcb7be9e102988fdf33d24"
             ],
             "version": "==1.2.3"
+        },
+        "sqlalchemy-aio": {
+            "hashes": [
+                "sha256:88074855e18895a8a9d7fa70a6027c2b994ccd99b8593b77d6999c6d4271651d",
+                "sha256:b820ad84ec5f9a66a2d8814f16cc2ea1b427b514f2926d60d67ae5208c07d565"
+            ],
+            "version": "==0.12.0"
         },
         "yarl": {
             "hashes": [

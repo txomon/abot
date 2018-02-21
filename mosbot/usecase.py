@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, unicode_literals
 
+import asyncio
 import datetime
 import json
 import logging
@@ -9,21 +10,18 @@ import aiopg.sa as asa
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as psa
 
-from abot.dubtrack import DubtrackWS
 from mosbot.db import Action, Origin, Playback, SongsHistory, Track, User, UserAction, get_engine, sqlite_get_engine
 
 logger = logging.getLogger(__name__)
 
 
 async def save_history_songs():
-    sqlite_engine = sqlite_get_engine()
-    conn = sqlite_engine.connect()
+    sqlite_engine = await sqlite_get_engine()
+    conn = await sqlite_engine.connect()
     query = sa.select([SongsHistory.c.song]).order_by(sa.asc(SongsHistory.c.played)).limit(2)
-    result = conn.execute(query)
+    result = await conn.execute(query)
 
     engine = await get_engine()
-    dubtrackws = DubtrackWS()
-    await dubtrackws.initialize()
 
     async def save_history_chunk(songs, conn: asa.SAConnection):
         # {'__v': 0,
@@ -110,7 +108,6 @@ async def save_history_songs():
             previous_song, previous_playback_id = {}, None
             trans = await conn.begin()
             for song in songs:
-                song_id = None
                 # Generate Action skip for the previous Playback entry
                 song_played = datetime.datetime.fromtimestamp(song['played'] / 1000)
                 if previous_song.get('skipped'):
@@ -129,31 +126,29 @@ async def save_history_songs():
                         query = psa.insert(UserAction).values(entry).on_conflict_do_nothing()
                         user_action_id = await (await conn.execute(query)).first()
                         if not user_action_id:
-                            logger.info(f'\tCollision UserAction<skip>#{user_action_id} {playback_id}({song_played})')
+                            logger.info(
+                                f'\tCollision UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
                         else:
-                            logger.info(f'UserAction<skip>#{user_action_id} {playback_id}({song_played})')
+                            logger.info(f'UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
                     else:
-                        logger.info(f'\tExists UserAction<skip>#{user_action_id} {playback_id}({song_played})')
+                        logger.info(
+                            f'\tExists UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
 
                 # Query or create the User for the Playback entry
-                query = sa.select([User.c.id]).where(User.c.dtid == song['userid'])
-                user_id = await (await conn.execute(query)).first()
                 dtid = song['userid']
                 username = song['_user']['username']
+                entry = {
+                    'dtid': dtid,
+                    'username': username,
+                }
 
+                query = psa.insert(User).values(entry).returning([User.c.id]).on_conflict_update()
+                user_id = await (await conn.execute(query)).first()
                 if not user_id:
-                    entry = {
-                        'dtid': dtid,
-                        'username': username,
-                    }
-                    query = psa.insert(User).values(entry).returning([User.c.id]).on_conflict_do_nothing()
-                    user_id = await (await conn.execute(query)).first()
-                    if not user_id:
-                        logger.info(f'\tCollision User#{user_id} {username}#{dtid}')
-                    else:
-                        logger.info(f'User#{user_id} {username}#{dtid}')
+                    await trans.rollback()
+                    raise ValueError(f'Error generating User {username}#{dtid} for {song_played}')
                 else:
-                    logger.info(f'\tExists User#{user_id} {username}#{dtid}')
+                    logger.info(f'User#{user_id} {username}#{dtid} by {song_played}')
 
                 # Query or create the Track entry for this Playback entry
                 origin = getattr(Origin, song['_song']['type'])
@@ -161,20 +156,19 @@ async def save_history_songs():
                 name = song['_song']['name']
                 fkid = song['_song']['fkid']
 
-                query = sa.select([Track.c.id]) \
-                    .where(Track.c.id == fkid) \
-                    .where(Track.c.origin == origin)
+                entry = {
+                    'length': length / 1000,
+                    'name': name,
+                    'origin': origin,
+                    'extid': fkid,
+                }
+                query = psa.insert(Track).values(entry).returning([Track.c.id]).on_conflict_update()
                 track_id = await (await conn.execute(query)).first()
                 if not track_id:
-                    entry = {
-                        'length': length / 1000,
-                        'name': name,
-                        'origin': origin,
-                        'extid': fkid,
-                    }
-                    query = psa.insert(Track).values(entry).returning([Track.c.id]).on_conflict_do_nothing()
-                    track_id = await (await conn.execute(query)).first()
-                    logger.info(f'Track#{track_id} {origin}#{}')
+                    await trans.rollback()
+                    raise ValueError(f'Error generating Track {origin}#{fkid} for {song_played}')
+                else:
+                    logger.info(f'Track#{track_id} {origin}#{fkid} by {song_played}')
 
                 # Query or create the Playback entry
                 entry = {
@@ -182,9 +176,13 @@ async def save_history_songs():
                     'user_id': user_id,
                     'start': song_played,
                 }
-                query = psa.insert(Playback).values(entry).returning([Playback.c.id]).on_conflict_do_nothing()
+                query = psa.insert(Playback).values(entry).returning([Playback.c.id]).on_conflict_update()
                 playback_id = await (await conn.execute(query)).first()
-                if playback_id
+                if not playback_id:
+                    await trans.rollback()
+                    raise ValueError(f'Error generating Playback track:{track_id} user_id:{fkid} start:{song_played}')
+                else:
+                    logger.info(f'Playback#{playback_id} track:{track_id} user_id:{fkid} start:{song_played}')
 
                 previous_song, previous_playback_id = song, playback_id
             try:
@@ -195,6 +193,13 @@ async def save_history_songs():
         else:
             logger.error(f'Failed to commit song-chunk: [{", ".join(songs)}]')
 
-    songs = None
-    for song, in result:
+    songs = []
+
+    # Logic here: [ ][ ][s][s][ ][s][ ]
+    # Groups:     \-/\-/\-------/\----/
+    async for song, in result:
         song = json.loads(song)
+        songs.append(song)
+        if not song['skipped']:
+            asyncio.ensure_future(save_history_chunk(songs, await engine.connect()))
+            songs = []

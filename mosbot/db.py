@@ -5,16 +5,17 @@ import enum
 
 import aiopg.sa as asa
 import sqlalchemy as sa
+from sqlalchemy_aio import ASYNCIO_STRATEGY
 
 from mosbot import config
 
 
-def sqlite_get_engine():
-    return sa.create_engine('sqlite:///songs.sqlite3')
+async def sqlite_get_engine():
+    return sa.create_engine('sqlite:///songs.sqlite3', strategy=ASYNCIO_STRATEGY)
 
 
 def create_sqlite_db():
-    engine = sqlite_get_engine()
+    engine = sa.create_engine('sqlite:///songs.sqlite3')
     metadata.create_all(engine)
 
 
