@@ -123,7 +123,7 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
         trans = await conn.begin()
         for song in songs:
             # Generate Action skip for the previous Playback entry
-            song_played = datetime.datetime.fromtimestamp(song['played'] / 1000)
+            song_played = datetime.datetime.utcfromtimestamp(song['played'] / 1000)
             if previous_song.get('skipped'):
                 query = sa.select([UserAction.c.id]) \
                     .where(UserAction.c.action == Action.skip) \

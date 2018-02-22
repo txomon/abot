@@ -6,8 +6,20 @@ import enum
 import aiopg.sa as asa
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as psa
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql import functions
 
 from mosbot import config
+
+
+class utcnow(functions.FunctionElement):  # noqa
+    key = 'utcnow'
+    type = sa.DateTime(timezone=True)
+
+
+@compiles(utcnow, 'postgresql')
+def _pg_utcnow(element, compiler, **kwargs):
+    return "(statement_timestamp() AT TIME ZONE 'utc')::TIMESTAMP WITH TIME ZONE"
 
 
 def sqlite_get_engine():

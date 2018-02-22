@@ -13,7 +13,7 @@ from mosbot import config
 from mosbot.db import SongsHistory, sqlite_get_engine
 from mosbot.usecase import save_history_songs
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 async def download_all_songs():
@@ -87,7 +87,7 @@ async def message_handler(ev: DubtrackMessage):
 
 
 def mos_bot():
-    logging.config.fileConfig(os.path.join(os.path.dirname(__file__), 'logging.conf'))
+    setup_logging()
     # Setup
     bot = Bot()
     dubtrack_backend = DubtrackBotBackend()
@@ -103,10 +103,15 @@ def mos_bot():
 
 
 def mos_history():
-    logging.config.fileConfig(os.path.join(os.path.dirname(__file__), 'logging.conf'))
+    setup_logging()
     loop = asyncio.get_event_loop()
     # loop.run_until_complete(download_all_songs())
     loop.run_until_complete(save_history_songs())
+
+
+def setup_logging(debug=False):
+    filename = 'logging.conf' if not debug else 'logging-debug.conf'
+    logging.config.fileConfig(os.path.join(os.path.dirname(__file__), filename), disable_existing_loggers=False)
 
 
 if __name__ == '__main__':
