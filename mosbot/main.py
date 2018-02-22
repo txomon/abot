@@ -1,7 +1,8 @@
 import asyncio
 import datetime
 import json
-import logging
+import logging.config
+import os
 import time
 
 import sqlalchemy as sa
@@ -10,6 +11,7 @@ from abot.bot import Bot
 from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackPlaying, DubtrackWS
 from mosbot import config
 from mosbot.db import SongsHistory, sqlite_get_engine
+from mosbot.usecase import save_history_songs
 
 logger = logging.getLogger()
 
@@ -17,8 +19,8 @@ logger = logging.getLogger()
 async def download_all_songs():
     dws = DubtrackWS()
     await dws.initialize()
-    engine = await sqlite_get_engine()
-    conn = await engine.connect()
+    engine = sqlite_get_engine()
+    conn = engine.connect()
     with open('last_page') as fd:
         last_page = int(fd.read())
     await dws.get_room_id()
@@ -26,7 +28,7 @@ async def download_all_songs():
     while True:
         logger.info(f'Doing page {last_page}')
         try:
-            entries = await dws.get_history(page=last_page)
+            entries = dws.get_history(page=last_page)
         except:
             logger.exception('Something went wrong, sleeping to retry')
             await asyncio.sleep(60)
@@ -39,7 +41,7 @@ async def download_all_songs():
         playtime = datetime.datetime.fromtimestamp(played / 1000)
 
         for entry in entries:
-            trans = await conn.begin()
+            trans = conn.begin()
             try:
                 query = sa.insert(SongsHistory).values({
                     'played': entry['played'],
@@ -47,12 +49,12 @@ async def download_all_songs():
                     'song': json.dumps(entry),
                     'skipped': entry['skipped'],
                 })
-                await conn.execute(query)
-                await trans.commit()
+                conn.execute(query)
+                trans.commit()
                 errors_together = 0
             except Exception as e:
                 errors_together += 1
-                await trans.rollback()
+                trans.rollback()
                 logger.info(f'Duplicate entry {entry["played"]}: {e}')
                 if errors_together > 3:
                     break
@@ -85,7 +87,7 @@ async def message_handler(ev: DubtrackMessage):
 
 
 def mos_bot():
-    logging.basicConfig(level=logging.INFO)
+    logging.config.fileConfig(os.path.join(os.path.dirname(__file__), 'logging.conf'))
     # Setup
     bot = Bot()
     dubtrack_backend = DubtrackBotBackend()
@@ -101,10 +103,10 @@ def mos_bot():
 
 
 def mos_history():
-    logging.basicConfig(level=logging.INFO)
+    logging.config.fileConfig(os.path.join(os.path.dirname(__file__), 'logging.conf'))
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(download_all_songs())
-    # loop.run_until_complete(save_history_songs())
+    # loop.run_until_complete(download_all_songs())
+    loop.run_until_complete(save_history_songs())
 
 
 if __name__ == '__main__':

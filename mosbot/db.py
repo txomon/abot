@@ -5,13 +5,13 @@ import enum
 
 import aiopg.sa as asa
 import sqlalchemy as sa
-from sqlalchemy_aio import ASYNCIO_STRATEGY
+import sqlalchemy.dialects.postgresql as psa
 
 from mosbot import config
 
 
-async def sqlite_get_engine():
-    return sa.create_engine('sqlite:///songs.sqlite3', strategy=ASYNCIO_STRATEGY)
+def sqlite_get_engine():
+    return sa.create_engine('sqlite:///songs.sqlite3')
 
 
 def create_sqlite_db():
@@ -47,7 +47,7 @@ class Origin(enum.Enum):
 Track = sa.Table('track', metadata,
                  sa.Column('id', sa.Integer, primary_key=True),
                  sa.Column('length', sa.Integer),
-                 sa.Column('origin', sa.Enum(Origin)),
+                 sa.Column('origin', psa.ENUM(Origin)),
                  sa.Column('extid', sa.Text),
                  sa.Column('name', sa.Text),
                  sa.UniqueConstraint('origin', 'extid')
@@ -71,8 +71,8 @@ UserAction = sa.Table('user_action', metadata,
                       sa.Column('id', sa.Integer, primary_key=True),
                       sa.Column('ts', sa.DateTime),
                       sa.Column('playback_id', sa.ForeignKey('playback.id')),
-                      sa.Column('user_id', sa.ForeignKey('user_id'), nullable=True),
-                      sa.Column('action', sa.Enum(Action)),
+                      sa.Column('user_id', sa.ForeignKey('user.id'), nullable=True),
+                      sa.Column('action', psa.ENUM(Action)),
                       )
 
 ENGINE = None
