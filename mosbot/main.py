@@ -8,9 +8,8 @@ import time
 import sqlalchemy as sa
 
 from abot.bot import Bot
-from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackPlaying, DubtrackWS
+from abot.dubtrack import DubtrackBotBackend, DubtrackMessage, DubtrackPlaying, DubtrackWS, DubtrackSkip
 from mosbot import config
-from mosbot.db import SongsHistory, sqlite_get_engine
 from mosbot.usecase import save_history_songs
 
 logger = logging.getLogger(__name__)
@@ -67,18 +66,22 @@ async def download_all_songs():
     with open('last_page', mode='wt') as fd:
         fd.write(str(last_page))
 
+last_song = None
 
 async def playing_handler(ev: DubtrackPlaying):
-    print(f'{id(ev)} Handling in playing_handler')
+    global last_song
+
     played_ts = ev.played
+    last_song= played_ts
     song_length_ts = ev.length
     played = datetime.datetime.fromtimestamp(played_ts)
     ending = datetime.datetime.fromtimestamp(played_ts + song_length_ts)
-    print(f'Playing {played} + {song_length_ts} = {ending}: {ev.song_name}')
-    now = time.time()
-    await asyncio.sleep(played_ts + song_length_ts - now)
-    print(f'Song should be finishing now')
 
+    print(f'Song {played_ts} playing')
+
+async def skip_handler(ev: DubtrackSkip):
+    ts = time.time()
+    print(f'Song {last_song} skipped at {ts}')
 
 async def message_handler(ev: DubtrackMessage):
     print(f'{id(ev)} Handling in message_handler')
@@ -94,7 +97,7 @@ def mos_bot():
     dubtrack_backend.configure(username=config.DUBTRACK_USERNAME, password=config.DUBTRACK_PASSWORD)
     bot.attach_backend(backend=dubtrack_backend)
 
-    bot.add_event_handler(DubtrackMessage, func=message_handler)
+    bot.add_event_handler(DubtrackSkip, func=skip_handler)
     bot.add_event_handler(DubtrackPlaying, func=playing_handler)
 
     # Run

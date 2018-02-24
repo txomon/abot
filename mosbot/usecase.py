@@ -10,31 +10,57 @@ import aiopg.sa as asa
 import sqlalchemy as sa
 import sqlalchemy.dialects.postgresql as psa
 
-from mosbot.db import Action, Origin, Playback, SongsHistory, Track, User, UserAction, get_engine, sqlite_get_engine
+from abot.dubtrack import DubtrackWS
+from mosbot import db
+from mosbot.config import BotConfig
 
 logger = logging.getLogger(__name__)
 
 
 async def save_history_songs():
-    sqlite_engine = sqlite_get_engine()
-    conn = sqlite_engine.connect()
-    query = sa.select([SongsHistory.c.song]).order_by(sa.asc(SongsHistory.c.played))
-    result = conn.execute(query)
+    engine = await db.get_engine()
+    last_song = await load_bot_data(BotConfig.last_saved_history)
+    if not last_song:
+        logger.error('There is no bot data regarding last saved playback')
+        return
 
-    engine = await get_engine()
+    dws = DubtrackWS()
+    await dws.initialize()
+
+    history_songs = {}
+    found_last_song = False
+    for page in range(1, 1000):
+        if found_last_song:
+            break  # We want to do whole pages just in case...
+        songs = await dws.get_history(page)
+        for song in songs:
+            played = song['played']
+            if played <= last_song:
+                found_last_song = True
+            history_songs[played] = song
 
     songs = []
-
+    tasks = {}
     # Logic here: [ ][ ][s][s][ ][s][ ]
     # Groups:     \-/\-/\-------/\----/
-    for song, in result:
+    for song, in sorted(history_songs.items()):
         song = json.loads(song)
         songs.append(song)
         if not song['skipped']:
-            asyncio.ensure_future(
+            tasks[song['played']] = asyncio.ensure_future(
                 save_history_chunk(songs, await engine.acquire())
             )
             songs = []
+
+    await asyncio.wait(tasks.values())
+
+    last_successful_song = None
+    for last_song, task in sorted(tasks.items()):
+        if task.exception():
+            break
+        last_successful_song = last_song
+    if last_successful_song:
+        await save_bot_data(BotConfig.last_saved_history, last_successful_song)
 
 
 async def save_history_chunk(songs, conn: asa.SAConnection):
@@ -125,19 +151,18 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
             # Generate Action skip for the previous Playback entry
             song_played = datetime.datetime.utcfromtimestamp(song['played'] / 1000)
             if previous_song.get('skipped'):
-                query = sa.select([UserAction.c.id]) \
-                    .where(UserAction.c.action == Action.skip) \
-                    .where(UserAction.c.ts == song_played) \
-                    .where(UserAction.c.playback_id == previous_playback_id)
+                query = sa.select([db.UserAction.c.id]) \
+                    .where(db.UserAction.c.action == db.Action.skip) \
+                    .where(db.UserAction.c.playback_id == previous_playback_id)
 
                 user_action_id = await (await conn.execute(query)).first()
                 if not user_action_id:
                     entry = {
                         'ts': song_played,
                         'playback_id': previous_playback_id,
-                        'action': Action.skip,
+                        'action': db.Action.skip,
                     }
-                    query = psa.insert(UserAction).values(entry).on_conflict_do_nothing()
+                    query = psa.insert(db.UserAction).values(entry).on_conflict_do_nothing()
                     user_action_id = await (await conn.execute(query)).first()
                     if not user_action_id:
                         logger.error(
@@ -157,14 +182,14 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                 'dtid': dtid,
                 'username': username,
             }
-            query = sa.select([User.c.id]).where(User.c.dtid == dtid)
+            query = sa.select([db.User.c.id]).where(db.User.c.dtid == dtid)
             user_id = await (await conn.execute(query)).first()
             if not user_id:
-                query = psa.insert(User) \
+                query = psa.insert(db.User) \
                     .values(entry) \
-                    .returning(User.c.id) \
+                    .returning(db.User.c.id) \
                     .on_conflict_do_update(
-                    index_elements=[User.c.dtid],
+                    index_elements=[db.User.c.dtid],
                     set_=entry
                 )
                 user_id = await (await conn.execute(query)).first()
@@ -180,7 +205,7 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                 user_id, = user_id.as_tuple()
 
             # Query or create the Track entry for this Playback entry
-            origin = getattr(Origin, song['_song']['type'])
+            origin = getattr(db.Origin, song['_song']['type'])
             length = song['_song']['songLength']
             name = song['_song']['name']
             fkid = song['_song']['fkid']
@@ -192,17 +217,17 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                 'extid': fkid,
             }
 
-            query = sa.select([Track.c.id]) \
-                .where(Track.c.extid == fkid) \
-                .where(Track.c.origin == origin)
+            query = sa.select([db.Track.c.id]) \
+                .where(db.Track.c.extid == fkid) \
+                .where(db.Track.c.origin == origin)
             track_id = await (await conn.execute(query)).first()
 
             if not track_id:
-                query = psa.insert(Track) \
+                query = psa.insert(db.Track) \
                     .values(entry) \
-                    .returning(Track.c.id) \
+                    .returning(db.Track.c.id) \
                     .on_conflict_do_update(
-                    index_elements=[Track.c.origin, Track.c.extid],
+                    index_elements=[db.Track.c.origin, db.Track.c.extid],
                     set_=entry
                 )
 
@@ -225,16 +250,16 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                 'user_id': user_id,
                 'start': song_played,
             }
-            query = sa.select([Playback.c.id]) \
-                .where(Playback.c.start == song_played)
+            query = sa.select([db.Playback.c.id]) \
+                .where(db.Playback.c.start == song_played)
             playback_id = await (await conn.execute(query)).first()
 
             if not playback_id:
-                query = psa.insert(Playback) \
+                query = psa.insert(db.Playback) \
                     .values(entry) \
-                    .returning(Playback.c.id) \
+                    .returning(db.Playback.c.id) \
                     .on_conflict_do_update(
-                    index_elements=[Playback.c.start],
+                    index_elements=[db.Playback.c.start],
                     set_=entry
                 )
                 playback_id = await (await conn.execute(query)).first()
@@ -251,15 +276,15 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                 playback_id, = playback_id.as_tuple()
 
             # Query or create the UserAction<upvote> UserAction<downvote> entries
-            for action, dubkey in ((Action.upvote, 'updubs'), (Action.downvote, 'downdubs')):
+            for action, dubkey in ((db.Action.upvote, 'updubs'), (db.Action.downvote, 'downdubs')):
                 # if no updubs/downdubs
                 votes = song[dubkey]
                 if not votes:
                     continue
 
-                query = sa.select([sa.func.count(UserAction.c.id)]) \
-                    .where(UserAction.c.action == action) \
-                    .where(UserAction.c.playback_id == playback_id)
+                query = sa.select([sa.func.count(db.UserAction.c.id)]) \
+                    .where(db.UserAction.c.action == action) \
+                    .where(db.UserAction.c.playback_id == playback_id)
                 action_count = await (await conn.execute(query)).first()
                 action_count, = action_count.as_tuple()
                 if action_count == votes:
@@ -274,7 +299,7 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                         'playback_id': playback_id,
                         'action': action,
                     }
-                    query = psa.insert(UserAction).values(entry)
+                    query = psa.insert(db.UserAction).values(entry)
                     user_action_id = await (await conn.execute(query)).first()
                     if not user_action_id:
                         logger.error(
@@ -294,3 +319,32 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
     else:
         logger.error(f'Failed to commit song-chunk: [{", ".join(songs)}]')
     await conn.close()
+
+
+async def save_bot_data(key, value):
+    engine = await db.get_engine()
+    async with  engine.acquire() as conn:
+        entry = {
+            'key': key,
+            'value': value
+        }
+        query = psa.insert([db.BotData]) \
+            .values(entry) \
+            .on_conflict_do_update(
+            index_elements=[db.BotData.c.key],
+            set_=entry
+        )
+        result = await (await conn.execute(query)).first()
+        if not result:
+            logger.error(f'Failed to save {key} value in database')
+
+
+async def load_bot_data(key):
+    engine = await db.get_engine()
+    async with  engine.acquire() as conn:
+        query = sa.select([db.BotData.c.value]).where(db.BotData.c.key == key)
+        result = await (await conn.execute(query)).first()
+        if not result:
+            logger.info(f'Failed to load {key} value from database')
+            return None
+        return result.as_tuple()[0]

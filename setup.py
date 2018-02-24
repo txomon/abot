@@ -26,7 +26,8 @@ setup(
     entry_points={
         'console_scripts': [
             'mos-bot=mosbot.main:mos_bot',
-            'mos-history=mosbot.main:mos_history',
+            'mos-history=mosbot.command:mos_history',
+            'bot=mosbot.command:botcli'
         ]
     }
 )

@@ -32,3 +32,6 @@ DATABASE_URL = get_config('DATABASE_URL', 'postgresql://localhost/test')
 
 DUBTRACK_USERNAME = get_config('DUBTRACK_USERNAME', None)
 DUBTRACK_PASSWORD = get_config('DUBTRACK_PASSWORD', None)
+
+class BotConfig:
+    last_saved_history = 'last_saved_history'
