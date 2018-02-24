@@ -2,6 +2,8 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
+import io
+import shlex
 
 import click
 import click._unicodefun
@@ -9,7 +11,16 @@ import click.core
 import click.utils
 from click import *  # noqa
 
+from abot.bot import MessageEvent
+
 __all__ = click.__all__
+
+
+def stringio_wrapper(func):
+    in_mem = io.StringIO()
+    yield in_mem
+    in_mem.seek(0)
+    func(in_mem)
 
 
 class Context(click.Context):
@@ -47,6 +58,15 @@ class Command(click.Command):
     async def async_invoke(self, ctx):
         if self.callback is not None:
             return await ctx.invoke(self.callback, **ctx.params)
+
+    def make_context(self, info_name, args, parent=None, **extra):
+        for key, value in self.context_settings.items():
+            if key not in extra:
+                extra[key] = value
+        ctx = Context(self, info_name=info_name, parent=parent, **extra)
+        with ctx.scope(cleanup=False):
+            self.parse_args(ctx, args)
+        return ctx
 
 
 class MultiCommand(click.MultiCommand):
@@ -130,6 +150,27 @@ class CommandCollection(click.CommandCollection):
 
     async def async_invoke(self, ctx):
         return await MultiCommand.async_invoke(self, ctx)
+
+    async def async_message(self, message: MessageEvent):
+        args = shlex.split(message.text)
+        if not args:
+            return
+        prog_name = args.pop(0)
+        try:
+            try:
+                with self.make_context(prog_name, args) as ctx:
+                    await self.async_invoke(ctx)
+                    ctx.exit()
+            except (EOFError, KeyboardInterrupt):
+                with stringio_wrapper(message.reply) as fd:
+                    echo(file=fd, color=False)
+                raise Abort()
+            except ClickException as e:
+                with stringio_wrapper(message.reply) as fd:
+                    e.show(file=fd)
+        except Abort:
+            with stringio_wrapper(message.reply) as fd:
+                echo('Aborted!', file=fd, color=False)
 
 
 def command(name=None, **attrs):

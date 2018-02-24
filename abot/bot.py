@@ -5,10 +5,10 @@ import asyncio
 import inspect
 import logging
 from asyncio.events import AbstractEventLoop
+from collections import defaultdict
 from typing import List, Optional
 
-from collections import defaultdict
-
+from abot.cli import CommandCollection, Group
 from abot.util import iterator_merge
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,17 @@ class Backend:
 
     def whoami(self) -> Optional['Entity']:
         raise NotImplementedError()
+
+    def is_mentioned(self, message_event: 'MessageEvent') -> Optional[str]:
+        username = self.whoami().username
+        text = message_event.text
+        if not username or text:
+            return None
+        if len(text) < 2:
+            return None
+        if text.startswith(username) or text[1:].startswith(username):
+            return username
+        return None
 
 
 class BotObject:
@@ -97,6 +108,7 @@ class Bot:
     def __init__(self):
         self.backends = {}
         self.event_handlers = defaultdict(set)
+        self.message_handlers = set()
 
     def attach_backend(self, backend: Backend):
         if backend in self.backends:
@@ -110,10 +122,17 @@ class Bot:
                 async for event in backend.consume():
                     yield event
             except:
-                logger.exception(f'Exception in {backend} handled')
+                logger.exception(f'Exception in {backend} handled. Trying to recover.')
 
-    def _handle_message(self, message):
-        raise NotImplementedError()
+    def attach_command_group(self, group: Group):
+        self.message_handlers.add(group)
+
+    async def _handle_message(self, message):
+        name = message.backend.is_mentioned(message)
+        if not name:
+            return
+        cmd = CommandCollection(self.message_handlers)
+        asyncio.ensure_future(await cmd.async_message(message))
 
     def add_event_handler(self, event_class, *, func=None):
         def wrapper(f):
@@ -129,11 +148,9 @@ class Bot:
 
     async def _handle_event(self, event: Event):
         # Same event can be handled multiple times, Messages only once
-
-        # TODO: Generate _handle_message
-        # if isinstance(event, MessageEvent):
-        #     logger.debug(f'Message event {event} handling as message')
-        #     self._handle_message(event)
+        if isinstance(event, MessageEvent):
+            logger.debug(f'Handling message {event.text}')
+            await self._handle_message(event)
         runs = 0
         for cls in inspect.getmro(event.__class__):
             for handler, handled_classes in self.event_handlers.items():
