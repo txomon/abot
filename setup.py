@@ -27,7 +27,7 @@ setup(
         'console_scripts': [
             'mos-bot=mosbot.main:mos_bot',
             'mos-history=mosbot.command:mos_history',
-            'bot=mosbot.command:botcli'
+            'bot=mosbot.__main__:main'
         ]
     }
 )

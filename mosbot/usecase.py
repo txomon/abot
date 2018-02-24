@@ -12,7 +12,7 @@ import sqlalchemy.dialects.postgresql as psa
 
 from abot.dubtrack import DubtrackWS
 from mosbot import db
-from mosbot.config import BotConfig
+from mosbot.db import BotConfig
 
 logger = logging.getLogger(__name__)
 
@@ -328,7 +328,7 @@ async def save_bot_data(key, value):
             'key': key,
             'value': value
         }
-        query = psa.insert([db.BotData]) \
+        query = psa.insert(db.BotData) \
             .values(entry) \
             .on_conflict_do_update(
             index_elements=[db.BotData.c.key],

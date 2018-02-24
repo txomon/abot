@@ -84,3 +84,7 @@ BotData = sa.Table('bot_data', metadata,
                    sa.Column('key', sa.Text, unique=True, nullable=False),
                    sa.Column('value', sa.JSON, nullable=False),
                    )
+
+
+class BotConfig:
+    last_saved_history = 'last_saved_history'
