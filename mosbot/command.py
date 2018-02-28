@@ -3,14 +3,15 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
 import json
+import sqlalchemy as sa
 
 import click
 
 import abot.cli as cli
 import abot.dubtrack as dt
 from abot.bot import Bot
-from mosbot import config
-from mosbot.db import BotConfig
+from mosbot import config, db
+from mosbot.db import BotConfig, get_engine
 from mosbot.main import playing_handler, setup_logging, skip_handler
 from mosbot.usecase import load_bot_data, save_bot_data, save_history_songs
 
@@ -52,6 +53,15 @@ async def botcmd():
 @botcmd.command()
 async def ping():
     print('PONG')
+
+@botcmd.command()
+async def test():
+    engine = await get_engine()
+    conn = await engine.acquire()
+    query = sa.select([db.User])
+    rows = await conn.execute(query)
+    res = await rows.first()
+    print(dict(res))
 
 
 @botcmd.command()

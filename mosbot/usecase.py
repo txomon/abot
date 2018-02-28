@@ -12,7 +12,7 @@ import sqlalchemy.dialects.postgresql as psa
 
 from abot.dubtrack import DubtrackWS
 from mosbot import db
-from mosbot.db import BotConfig
+from mosbot.db import BotConfig, get_user, save_user
 
 logger = logging.getLogger(__name__)
 
@@ -178,31 +178,12 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
             # Query or create the User for the Playback entry
             dtid = song['userid']
             username = song['_user']['username']
-            entry = {
-                'dtid': dtid,
-                'username': username,
-            }
-            query = sa.select([db.User.c.id]).where(db.User.c.dtid == dtid)
-            user_id = await (await conn.execute(query)).first()
-            if not user_id:
-                query = psa.insert(db.User) \
-                    .values(entry) \
-                    .returning(db.User.c.id) \
-                    .on_conflict_do_update(
-                    index_elements=[db.User.c.dtid],
-                    set_=entry
-                )
-                user_id = await (await conn.execute(query)).first()
-                user_id, = user_id.as_tuple()
-                if not user_id:
-                    logger.error(f'Error User#{user_id} {username}#{dtid} by {song_played}')
-                    await trans.rollback()
-                    raise ValueError(f'Error generating User {username}#{dtid} for {song_played}')
-                else:
-                    logger.debug(f'User#{user_id} {username}#{dtid} by {song_played}')
-            else:
-                logger.debug(f'\tExists User#{user_id} {username}#{dtid} by {song_played}')
-                user_id, = user_id.as_tuple()
+            user = await get_user(user_dict={'dtid': dtid}, conn=conn)
+            if not user:
+                user = await save_user(user_dict={'dtid': dtid, 'username': username}, conn=conn)
+                if not user:
+                    raise ValueError('Impossible to create/save the user')
+            user_id = user['id']
 
             # Query or create the Track entry for this Playback entry
             origin = getattr(db.Origin, song['_song']['type'])
@@ -348,3 +329,7 @@ async def load_bot_data(key):
             logger.info(f'Failed to load {key} value from database')
             return None
         return result.as_tuple()[0]
+
+
+async def save_playback(playback):
+    pass
