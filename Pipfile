@@ -11,6 +11,8 @@ aiohttp = "*"
 sqlalchemy = "*"
 click = "*"
 aiopg = "*"
+alembic = "*"
+asyncio-extras = "*"
 
 
 [dev-packages]
@@ -19,6 +21,5 @@ pylint = "*"
 rope = "*"
 "autopep8" = "*"
 restructuredtext-lint = "*"
-alembic = "*"
 logging-tree = "*"
 ipdb = "*"

@@ -5,7 +5,7 @@ from typing import Any
 
 from abot.dubtrack import DubtrackDub, DubtrackPlaying, DubtrackSkip
 from mosbot.query import ensure_connection
-from mosbot.usecase import ensure_dubtrack_playing, ensure_dubtrack_skip
+from mosbot.usecase import ensure_dubtrack_playing, ensure_dubtrack_skip, ensure_dubtrack_dub
 
 
 async def history_handler(event: Any[DubtrackSkip, DubtrackPlaying, DubtrackDub]):

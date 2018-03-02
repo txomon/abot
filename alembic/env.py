@@ -20,7 +20,7 @@ fileConfig(
         os.path.dirname(
             os.path.dirname(__file__)
         ),
-        'mosbot/logging.conf'
+        'mosbot/logging-debug.conf'
     )
 )
 

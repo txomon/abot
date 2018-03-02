@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from abot.dubtrack import DubtrackDub, DubtrackEntity, DubtrackPlaying, DubtrackSkip, DubtrackWS
 from mosbot import db
 from mosbot.db import Action, BotConfig, Origin
-from mosbot.query import delete_user_action, get_dub_action, get_last_playback, get_playback, get_track, get_user, \
-    get_user_dub_user_actions, load_bot_data, save_bot_data, save_playback, save_track, save_user, save_user_action
+from mosbot.query import get_dub_action, get_last_playback, get_playback, get_track, get_user, load_bot_data, \
+    query_simplified_user_actions, save_bot_data, save_playback, save_track, save_user, save_user_action
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ async def save_history_songs():
     history_songs = {}
     found_last_song = False
     for page in range(1, 1000):
+        logger.info(f'Retrieving page {page}, so far {len(history_songs)} songs')
         if found_last_song:
             break  # We want to do whole pages just in case...
         songs = await dws.get_history(page)
@@ -59,8 +60,9 @@ async def save_history_songs():
     for last_song, task in sorted(tasks.items()):
         if task.exception():
             break
-        last_successful_song = last_song
+        last_successful_song: datetime.datetime = last_song
     if last_successful_song:
+        logger.info(f'Successfully saved until {last_successful_song}')
         await save_bot_data(BotConfig.last_saved_history, last_successful_song)
 
 
@@ -145,6 +147,7 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
     #  'updubs': 1,
     #  'userid': '57595c7a16c34f3d00b5ea8d'
     #  }
+    song_played = None
     for retries in range(10):
         previous_song, previous_playback_id = {}, None
         trans = await conn.begin()
@@ -223,6 +226,7 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
             playback_id = playback['id']
 
             # Query or create the UserAction<upvote> UserAction<downvote> entries
+            user_actions = await query_simplified_user_actions(playback_id, conn=conn)
             for dubkey in ('updubs', 'downdubs'):
                 # if no updubs/downdubs
                 votes = song[dubkey]
@@ -231,11 +235,8 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                 if not votes:
                     continue
 
-                query = sa.select([sa.func.count(db.UserAction.c.id)]) \
-                    .where(db.UserAction.c.action == action) \
-                    .where(db.UserAction.c.playback_id == playback_id)
-                action_count = await (await conn.execute(query)).first()
-                action_count, = action_count.as_tuple()
+                action_user_actions = [a for a in user_actions if a['action'] == action]
+                action_count = len(action_user_actions)
                 if action_count == votes:
                     continue
                 if action_count > votes:
@@ -243,7 +244,7 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                     continue
                 # There are less than they should
                 for _ in range(votes - action_count):
-                    user_action = save_user_action(user_action_dict={
+                    user_action = await save_user_action(user_action_dict={
                         'ts': song_played,
                         'playback_id': playback_id,
                         'action': action,
@@ -258,6 +259,7 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
             previous_song, previous_playback_id = song, playback_id
         try:
             await trans.commit()
+            logger.info(f'Saved songs up to {song_played}')
             break
         except:
             await trans.rollback()
@@ -328,14 +330,10 @@ async def ensure_dubtrack_dub(event: DubtrackDub, *, conn=None):
     user_id = user['id']
     action_type = get_dub_action(event.dubtype)
 
-    user_actions = await get_user_dub_user_actions(user_id, conn=conn)
-    if user_actions:
-        for user_action in user_actions:
-            await delete_user_action(user_action_id=user_action['id'], conn=conn)
-        user_action_dict = {
-            'ts': datetime.datetime.utcnow(),
-            'playback_id': playback_id,
-            'user_id': user_id,
-            'action': action_type,
-        }
-        await save_user_action(user_action_dict=user_action_dict, conn=conn)
+    user_action_dict = {
+        'ts': datetime.datetime.utcnow(),
+        'playback_id': playback_id,
+        'user_id': user_id,
+        'action': action_type,
+    }
+    await save_user_action(user_action_dict=user_action_dict, conn=conn)
