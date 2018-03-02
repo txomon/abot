@@ -58,8 +58,8 @@ async def ping():
 
 
 @botcmd.command()
-async def test():
-    print('Test')
+async def atest():
+    print('aTest')
 
 
 @botcmd.command()
@@ -90,6 +90,9 @@ def mos_history():
     loop = asyncio.get_event_loop()
     loop.run_until_complete(save_history_songs())
 
+@botcli.command()
+def test():
+    print('TEST')
 
 @botcli.command()
 def run():

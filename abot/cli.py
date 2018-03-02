@@ -46,7 +46,7 @@ class Context(click.Context):
                 return await callback(*args, **kwargs)
 
 
-class Command(click.Command):
+class AsyncCommandMixin:
     def invoke(self, ctx):
         """Given a context, this invokes the attached callback (if it exists)
         in the right way.
@@ -69,16 +69,21 @@ class Command(click.Command):
         return ctx
 
 
-class MultiCommand(click.MultiCommand):
+class Command(AsyncCommandMixin, click.Command):
+    pass
+
+
+class AsyncMultiCommandMixin(AsyncCommandMixin):
     def invoke(self, ctx):
-        if ctx.__class__ == Context:
+        args = ctx.protected_args + ctx.args
+        _, cmd, _ = self.resolve_command(ctx, args)
+        if ctx.__class__ != Context or isinstance(cmd, click.Command):
+            click.MultiCommand.invoke(self, ctx)
+        else:
             loop = asyncio.get_event_loop()
             return loop.run_until_complete(self.async_invoke(ctx))
-        else:
-            click.MultiCommand.invoke(self, ctx)
 
     async def async_invoke(self, ctx):
-
         async def _process_result(value):
             if self.result_callback is not None:
                 value = await ctx.invoke(self.result_callback, value,
@@ -128,7 +133,11 @@ class MultiCommand(click.MultiCommand):
             return _process_result(rv)
 
 
-class Group(click.Group):
+class MultiCommand(AsyncMultiCommandMixin, click.MultiCommand):
+    pass
+
+
+class AsyncGroupMixin(AsyncMultiCommandMixin):
     def command(self, *args, **kwargs):
         kwargs.setdefault('cls', Command)
         return super().command(*args, **kwargs)
@@ -144,13 +153,11 @@ class Group(click.Group):
         return await MultiCommand.async_invoke(self, ctx)
 
 
-class CommandCollection(click.CommandCollection):
-    def invoke(self, ctx):
-        return MultiCommand.invoke(self, ctx)
+class Group(AsyncGroupMixin, click.Group):
+    pass
 
-    async def async_invoke(self, ctx):
-        return await MultiCommand.async_invoke(self, ctx)
 
+class AsyncCommandCollection(AsyncMultiCommandMixin):
     async def async_message(self, message: MessageEvent):
         args = shlex.split(message.text)
         if not args:
@@ -171,6 +178,10 @@ class CommandCollection(click.CommandCollection):
         except Abort:
             with stringio_wrapper(message.reply) as fd:
                 echo('Aborted!', file=fd, color=False)
+
+
+class CommandCollection(AsyncMultiCommandMixin, click.CommandCollection):
+    pass
 
 
 def command(name=None, **attrs):
