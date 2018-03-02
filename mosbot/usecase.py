@@ -8,11 +8,12 @@ import logging
 
 import aiopg.sa as asa
 import sqlalchemy as sa
-import sqlalchemy.dialects.postgresql as psa
 
-from abot.dubtrack import DubtrackWS
+from abot.dubtrack import DubtrackDub, DubtrackEntity, DubtrackPlaying, DubtrackSkip, DubtrackWS
 from mosbot import db
-from mosbot.db import BotConfig, get_user, save_user
+from mosbot.db import Action, BotConfig, Origin
+from mosbot.query import delete_user_action, get_dub_action, get_last_playback, get_playback, get_track, get_user, \
+    get_user_dub_user_actions, load_bot_data, save_bot_data, save_playback, save_track, save_user, save_user_action
 
 logger = logging.getLogger(__name__)
 
@@ -157,21 +158,19 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
 
                 user_action_id = await (await conn.execute(query)).first()
                 if not user_action_id:
-                    entry = {
+                    user_action = await save_user_action(user_action_dict={
                         'ts': song_played,
                         'playback_id': previous_playback_id,
                         'action': db.Action.skip,
-                    }
-                    query = psa.insert(db.UserAction).values(entry).on_conflict_do_nothing()
-                    user_action_id = await (await conn.execute(query)).first()
+                    }, conn=conn)
                     if not user_action_id:
                         logger.error(
                             f'Error UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
                         await trans.rollback()
                         raise ValueError(
                             f'\tCollision UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
-                    else:
-                        logger.debug(f'UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
+                    user_action_id = user_action['id']
+                    logger.debug(f'UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
                 else:
                     logger.debug(f'\tExists UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
 
@@ -182,6 +181,7 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
             if not user:
                 user = await save_user(user_dict={'dtid': dtid, 'username': username}, conn=conn)
                 if not user:
+                    await trans.rollback()
                     raise ValueError('Impossible to create/save the user')
             user_id = user['id']
 
@@ -198,32 +198,14 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                 'extid': fkid,
             }
 
-            query = sa.select([db.Track.c.id]) \
-                .where(db.Track.c.extid == fkid) \
-                .where(db.Track.c.origin == origin)
-            track_id = await (await conn.execute(query)).first()
-
-            if not track_id:
-                query = psa.insert(db.Track) \
-                    .values(entry) \
-                    .returning(db.Track.c.id) \
-                    .on_conflict_do_update(
-                    index_elements=[db.Track.c.origin, db.Track.c.extid],
-                    set_=entry
-                )
-
-                track_id = await (await conn.execute(query)).first()
-                track_id, = track_id.as_tuple()
-
-                if not track_id:
+            track = await get_track(track_dict=entry, conn=conn)
+            if not track:
+                track = await save_track(track_dict=entry, conn=conn)
+                if not track:
                     logger.error(f'Error Track#{track_id} {origin}#{fkid} by {song_played}')
                     await trans.rollback()
                     raise ValueError(f'Error generating Track {origin}#{fkid} for {song_played}')
-                else:
-                    logger.debug(f'Track#{track_id} {origin}#{fkid} by {song_played}')
-            else:
-                logger.debug(f'\tExists Track#{track_id} {origin}#{fkid} by {song_played}')
-                track_id, = track_id.as_tuple()
+            track_id = track['id']
 
             # Query or create the Playback entry
             entry = {
@@ -231,35 +213,21 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                 'user_id': user_id,
                 'start': song_played,
             }
-            query = sa.select([db.Playback.c.id]) \
-                .where(db.Playback.c.start == song_played)
-            playback_id = await (await conn.execute(query)).first()
-
-            if not playback_id:
-                query = psa.insert(db.Playback) \
-                    .values(entry) \
-                    .returning(db.Playback.c.id) \
-                    .on_conflict_do_update(
-                    index_elements=[db.Playback.c.start],
-                    set_=entry
-                )
-                playback_id = await (await conn.execute(query)).first()
-                playback_id, = playback_id.as_tuple()
-
-                if not playback_id:
+            playback = await get_playback(playback_dict=entry)
+            if not playback:
+                playback = await save_playback(playback_dict=entry)
+                if not playback:
                     logger.error(f'Error Playback#{playback_id} track:{track_id} user_id:{fkid} start:{song_played}')
                     await trans.rollback()
                     raise ValueError(f'Error generating Playback track:{track_id} user_id:{fkid} start:{song_played}')
-                else:
-                    logger.debug(f'Playback#{playback_id} track:{track_id} user_id:{fkid} start:{song_played}')
-            else:
-                logger.debug(f'\tExists Playback#{playback_id} track:{track_id} user_id:{fkid} start:{song_played}')
-                playback_id, = playback_id.as_tuple()
+            playback_id = playback['id']
 
             # Query or create the UserAction<upvote> UserAction<downvote> entries
-            for action, dubkey in ((db.Action.upvote, 'updubs'), (db.Action.downvote, 'downdubs')):
+            for dubkey in ('updubs', 'downdubs'):
                 # if no updubs/downdubs
                 votes = song[dubkey]
+                action = get_dub_action(dubkey)
+
                 if not votes:
                     continue
 
@@ -275,21 +243,17 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                     continue
                 # There are less than they should
                 for _ in range(votes - action_count):
-                    entry = {
+                    user_action = save_user_action(user_action_dict={
                         'ts': song_played,
                         'playback_id': playback_id,
                         'action': action,
-                    }
-                    query = psa.insert(db.UserAction).values(entry)
-                    user_action_id = await (await conn.execute(query)).first()
-                    if not user_action_id:
+                    }, conn=conn)
+                    if not user_action:
                         logger.error(
                             f'\tError UserAction<vote>#{user_action_id} {playback_id}({song_played})')
                         await trans.rollback()
                         raise ValueError(
                             f'\tCollision UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
-                    else:
-                        logger.debug(f'UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
 
             previous_song, previous_playback_id = song, playback_id
         try:
@@ -302,34 +266,76 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
     await conn.close()
 
 
-async def save_bot_data(key, value):
-    engine = await db.get_engine()
-    async with  engine.acquire() as conn:
-        entry = {
-            'key': key,
-            'value': value
+async def ensure_dubtrack_entity(user: DubtrackEntity, *, conn=None):
+    dtid = user.id
+    username = user.username
+    user = await get_user(user_dict={'dtid': dtid}, conn=conn)
+    if not user:
+        user = await save_user(user_dict={'dtid': dtid, 'username': username}, conn=conn)
+        if not user:
+            raise ValueError('Impossible to create/save the user')
+    return user
+
+
+async def ensure_dubtrack_playing(event: DubtrackPlaying, *, conn=None):
+    user = await ensure_dubtrack_entity(event.sender)
+    user_id = user['id']
+    track_entry = {
+        'length': event.length,
+        'origin': getattr(Origin, event.song_type),
+        'extid': event.song_external_id,
+        'name': event.song_name,
+    }
+    track = await get_track(track_dict=track_entry, conn=conn)
+    if not track:
+        track = await save_track(track_dict=track_entry, conn=conn)
+        if not track:
+            raise ValueError(f"Couldn't save track {track_entry}")
+    track_id = track
+
+    playback_entry = {
+        'user_id': user_id,
+        'track_id': track_id,
+        'start': event.played,
+    }
+
+    playback = await get_playback(playback_dict=playback_entry, conn=conn)
+    if not playback:
+        await save_playback(playback_dict=playback_entry, conn=conn)
+
+
+async def ensure_dubtrack_skip(event: DubtrackSkip, *, conn=None):
+    playback = await get_last_playback(conn=conn)
+    user = await ensure_dubtrack_entity(event.sender)
+    playback_id = playback['id']
+    user_id = user['id']
+    await save_user_action(user_action_dict={
+        'playback_id': playback_id,
+        'user_id': user_id,
+        'action': Action.skip,
+        'ts': datetime.datetime.utcnow(),
+    })
+
+
+async def ensure_dubtrack_dub(event: DubtrackDub, *, conn=None):
+    playback = await get_last_playback(conn=conn)
+    if not event.played == playback['start']:
+        logger.error(f'Last saved playback is {playback["start"]} but this vote is for {event.played}')
+        return
+    playback_id = playback['id']
+
+    user = await ensure_dubtrack_entity(event.sender, conn=conn)
+    user_id = user['id']
+    action_type = get_dub_action(event.dubtype)
+
+    user_actions = await get_user_dub_user_actions(user_id, conn=conn)
+    if user_actions:
+        for user_action in user_actions:
+            await delete_user_action(user_action_id=user_action['id'], conn=conn)
+        user_action_dict = {
+            'ts': datetime.datetime.utcnow(),
+            'playback_id': playback_id,
+            'user_id': user_id,
+            'action': action_type,
         }
-        query = psa.insert(db.BotData) \
-            .values(entry) \
-            .on_conflict_do_update(
-            index_elements=[db.BotData.c.key],
-            set_=entry
-        )
-        result = await (await conn.execute(query)).first()
-        if not result:
-            logger.error(f'Failed to save {key} value in database')
-
-
-async def load_bot_data(key):
-    engine = await db.get_engine()
-    async with  engine.acquire() as conn:
-        query = sa.select([db.BotData.c.value]).where(db.BotData.c.key == key)
-        result = await (await conn.execute(query)).first()
-        if not result:
-            logger.info(f'Failed to load {key} value from database')
-            return None
-        return result.as_tuple()[0]
-
-
-async def save_playback(playback):
-    pass
+        await save_user_action(user_action_dict=user_action_dict, conn=conn)

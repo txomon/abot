@@ -2,6 +2,7 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
+import datetime
 import json
 import logging
 import pprint
@@ -209,12 +210,36 @@ class DubtrackDub(DubtrackEvent):
     def sender(self) -> DubtrackEntity:
         return self._dubtrack_backend._get_entity(self._data['user']['username'])
 
+    @property
+    def dubtype(self):
+        return self._data['dubtype']
+
+    @property
+    def total_updubs(self):
+        return self._data['playlist']['updubs']
+
+    @property
+    def total_downdubs(self):
+        return self._data['playlist']['downdubs']
+
+    @property
+    def song_length(self):
+        return self._data['playlist']['length']
+
+    @property
+    def length(self):
+        return datetime.timedelta(milliseconds=self._data['playlist']['songLength'])
+
+    @property
+    def played(self):
+        return datetime.datetime.utcfromtimestamp(self._data['playlist']['played'] / 1000)
+
     def __repr__(self):
         cls = self.__class__.__name__
-        dubtype = self._data['dubtype']
+        dubtype = self.dubtype
         sender = self.sender
-        downdubs = self._data['playlist']['downdubs']
-        updubs = self._data['playlist']['updubs']
+        downdubs = self.total_downdubs
+        updubs = self.total_updubs
         return f'<{cls}#{dubtype} {sender} +{updubs}-{downdubs}>'
 
 
@@ -286,11 +311,11 @@ class DubtrackPlaying(DubtrackEvent):
 
     @property
     def length(self):
-        return self._data['songInfo']['songLength'] / 1000
+        return datetime.timedelta(milliseconds=self._data['songInfo']['songLength'])
 
     @property
     def played(self):
-        return self._data['song']['played'] / 1000
+        return datetime.datetime.utcfromtimestamp(self._data['song']['played'] / 1000)
 
 
 class DubtrackJoin(DubtrackEvent):
@@ -1239,18 +1264,18 @@ class DubtrackWS:
                 #               'songid': '5a0db972fd20620100678621',
                 #               'updubs': 0,
                 #               'userid': '56a80c626894b9410067b716'},
-                #     'type': 'room_playlist-dub',
-                #     'user': {'__v': 0,
-                #              '_force_updated': 1516971162191,
-                #              '_id': '560b135c7ae1ea0300869b20',
-                #              'created': 1443566427591,
-                #              'dubs': 0,
-                #              'roleid': 1,
-                #              'status': 1,
-                #              'userInfo': {'__v': 0,
-                #                           '_id': '560b135c7ae1ea0300869b21',
-                #                           'userid': '560b135c7ae1ea0300869b20'},
-                #              'username': 'txomon'}}
+                #  'type': 'room_playlist-dub',
+                #  'user': {'__v': 0,
+                #           '_force_updated': 1516971162191,
+                #           '_id': '560b135c7ae1ea0300869b20',
+                #           'created': 1443566427591,
+                #           'dubs': 0,
+                #           'roleid': 1,
+                #           'status': 1,
+                #           'userInfo': {'__v': 0,
+                #                        '_id': '560b135c7ae1ea0300869b21',
+                #                        'userid': '560b135c7ae1ea0300869b20'},
+                #           'username': 'txomon'}}
                 dubtype = content['dubtype']
                 username = content['user']['username']
                 userid = content['user']['userInfo']['userid']

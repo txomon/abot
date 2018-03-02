@@ -3,17 +3,18 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
 import json
-import sqlalchemy as sa
 
 import click
+import sqlalchemy as sa
 
 import abot.cli as cli
 import abot.dubtrack as dt
 from abot.bot import Bot
 from mosbot import config, db
-from mosbot.db import BotConfig, get_engine
+from mosbot.db import BotConfig
 from mosbot.main import playing_handler, setup_logging, skip_handler
-from mosbot.usecase import load_bot_data, save_bot_data, save_history_songs
+from mosbot.query import load_bot_data, save_bot_data
+from mosbot.usecase import save_history_songs
 
 
 class BotConfigValueType(click.ParamType):
@@ -54,14 +55,46 @@ async def botcmd():
 async def ping():
     print('PONG')
 
+
 @botcmd.command()
 async def test():
-    engine = await get_engine()
-    conn = await engine.acquire()
-    query = sa.select([db.User])
-    rows = await conn.execute(query)
-    res = await rows.first()
-    print(dict(res))
+    ua1 = db.UserAction.alias('ua1')
+    ua2 = db.UserAction.alias('ua2')
+    import sqlalchemy.sql.functions as saf
+    ts = saf.max(ua2.c.ts).label('ts')
+    sub_query = sa.select([
+        ua2.c.user_id,
+        ts,
+        ua2.c.playback_id,
+    ]).group_by(
+        ua2.c.user_id,
+        ua2.c.playback_id,
+        sa.case([
+            (ua2.c.user_id.is_(None), ua2.c.id),
+        ], else_=sa.true)
+    )
+    query = sa.select([
+        sa.distinct(ua1.c.id),
+        ua1.c.action,
+        ua1.c.playback_id,
+        ua1.c.ts,
+        ua1.c.user_id,
+    ]).select_from(
+        ua1.join(
+            sub_query,
+            sa.and_(
+                ts == ua1.c.ts,
+                ua1.c.playback_id == ua2.c.playback_id,
+                sa.case([
+                    (sa.and_(
+                        ua1.c.user_id.is_(None),
+                        ua2.c.user_id.is_(None)
+                    ), sa.true)
+                ], else_=ua1.c.user_id == ua2.c.user_id)
+            )
+        )
+    )
+    print(query)
 
 
 @botcmd.command()
