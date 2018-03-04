@@ -215,9 +215,7 @@ def extract_possible_argument_types(func) -> Iterable:
     args = typing.get_type_hints(func)
     if len(args) != 1:
         raise AttributeError(f'Function {func} can only have one argument if using type hinting')
-    type_hint: typing.Union = next(iter(args.values()))
-    try:
-        isinstance(type_hint, typing.Union)
-    except TypeError:
+    type_hint = next(iter(args.values()))
+    if type_hint.__class__.__name__ == '_Union':
         return type_hint.__args__
     return type_hint,

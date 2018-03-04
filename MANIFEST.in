@@ -1,6 +1,2 @@
 include Pipfile
 include Pipfile.lock
-include alembic.ini
-recursive-include mosbot *.conf
-recursive-include alembic *.mako
-recursive-include alembic *.py

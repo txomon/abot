@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 
 setup(
     name='abot',
-    version='0.0.1a',
+    version='0.0.1a1',
     description='Bot creation library',
     long_description=open('README.rst').read(),
     url='https://github.com/txomon/abot',
@@ -18,7 +18,8 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3.6',
     ],
-    packages=find_packages(),
+    packages=find_packages(exclude=['tests']),
+    license='MIT',
     python_requires='>=3.6',
     include_package_data=True,
     zip_safe=False,
