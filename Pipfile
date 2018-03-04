@@ -8,11 +8,7 @@ name = "pypi"
 [packages]
 
 aiohttp = "*"
-sqlalchemy = "*"
 click = "*"
-aiopg = "*"
-alembic = "*"
-asyncio-extras = "*"
 
 
 [dev-packages]
@@ -22,4 +18,3 @@ rope = "*"
 "autopep8" = "*"
 restructuredtext-lint = "*"
 logging-tree = "*"
-ipdb = "*"

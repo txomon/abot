@@ -22,10 +22,5 @@ setup(
     python_requires='>=3.6',
     include_package_data=True,
     zip_safe=False,
-    keywords=['slack', 'dubtrack', 'bot', 'async'],
-    entry_points={
-        'console_scripts': [
-            'bot=mosbot.__main__:main'
-        ]
-    }
+    keywords=['slack', 'dubtrack', 'bot', 'async', 'asyncio'],
 )
