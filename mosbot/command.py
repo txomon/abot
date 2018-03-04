@@ -16,7 +16,7 @@ from mosbot.db import BotConfig
 from mosbot.handler import availability_handler, history_handler
 from mosbot.query import load_bot_data, save_bot_data
 from mosbot.usecase import save_history_songs
-from mosbot.utils import setup_logging
+from mosbot.utils import setup_logging, check_alembic_in_latest_version
 
 
 class BotConfigValueType(click.ParamType):
@@ -61,6 +61,7 @@ async def atest():
 @botcmd.command()
 @click.option('--debug/--no-debug', '-d/ ', default=False)
 async def history_sync(debug):
+    check_alembic_in_latest_version()
     setup_logging(debug)
     await save_history_songs()
 
@@ -91,6 +92,7 @@ def test():
 @botcli.command()
 @click.option('--debug/--no-debug', '-d/ ', default=False)
 def run(debug):
+    check_alembic_in_latest_version()
     setup_logging(debug)
     # Setup
     bot = Bot()

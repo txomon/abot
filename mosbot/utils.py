@@ -3,8 +3,13 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import logging.config
 import os
+import pprint
 import sys
 import traceback
+
+from alembic.config import Config
+from alembic.runtime.environment import EnvironmentContext
+from alembic.script import ScriptDirectory
 
 logger = logging.getLogger(__name__)
 
@@ -29,3 +34,20 @@ def setup_logging(debug=False):
         logger.info('Level is info now')
 
 
+def check_alembic_in_latest_version():
+    config = Config('alembic.ini')
+    script = ScriptDirectory.from_config(config)
+    heads = script.get_revisions(script.get_heads())
+    head = heads[0].revision
+    current_head = None
+
+    def _f(rev, context):
+        nonlocal current_head
+        current_head = rev[0] if rev else 'base'
+        return []
+
+    with EnvironmentContext(config, script, fn=_f):
+        script.run_env()
+
+    if head != current_head:
+        raise RuntimeError(f'Database is not upgraded to latest head {head} from {current_head}')
