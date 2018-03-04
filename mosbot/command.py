@@ -9,7 +9,7 @@ import click
 import abot.cli as cli
 import abot.dubtrack as dt
 from abot.bot import Bot
-from mosbot import config
+from mosbot import config as mos_config
 from mosbot.db import BotConfig
 from mosbot.main import playing_handler, setup_logging, skip_handler
 from mosbot.query import load_bot_data, save_bot_data
@@ -46,20 +46,20 @@ class BotConfigValueType(click.ParamType):
 
 
 @cli.group(invoke_without_command=True)
-@click.option('-d', '--debug', default=False)
-async def botcmd(debug):
-    setup_logging(debug)
+async def botcmd():
     print('botcmd')
-
-
-@botcmd.command()
-async def ping():
-    print('PONG')
 
 
 @botcmd.command()
 async def atest():
     print('aTest')
+
+
+@botcmd.command()
+@click.option('--debug/--no-debug', '-d/ ', default=False)
+async def history_sync(debug):
+    setup_logging(debug)
+    await save_history_songs()
 
 
 @botcmd.command()
@@ -74,32 +74,24 @@ async def config(key, value):
         cli.echo(f'Value for key {key} is `{json.dumps(value)}`')
 
 
-@botcmd.command()
-async def history_sync():
-    await save_history_songs()
-
-
-@click.group()
+@click.group(invoke_without_command=True)
 def botcli():
-    print('BOTCLI')
+    click.echo('BOTCLI')
 
-
-@botcli.command()
-def mos_history():
-    setup_logging()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(save_history_songs())
 
 @botcli.command()
 def test():
-    print('TEST')
+    click.echo('TEST')
+
 
 @botcli.command()
-def run():
+@click.option('--debug/--no-debug', '-d/ ', default=False)
+def run(debug):
+    setup_logging(debug)
     # Setup
     bot = Bot()
     dubtrack_backend = dt.DubtrackBotBackend()
-    dubtrack_backend.configure(username=config.DUBTRACK_USERNAME, password=config.DUBTRACK_PASSWORD)
+    dubtrack_backend.configure(username=mos_config.DUBTRACK_USERNAME, password=mos_config.DUBTRACK_PASSWORD)
     bot.attach_backend(backend=dubtrack_backend)
 
     bot.add_event_handler(dt.DubtrackSkip, func=skip_handler)

@@ -24,7 +24,7 @@ def stringio_wrapper(func):
 
 
 class Context(click.Context):
-    async def invoke(*args, **kwargs):
+    async def async_invoke(*args, **kwargs):
         self, callback = args[:2]
         ctx = self
 
@@ -57,7 +57,7 @@ class AsyncCommandMixin:
 
     async def async_invoke(self, ctx):
         if self.callback is not None:
-            return await ctx.invoke(self.callback, **ctx.params)
+            return await ctx.async_invoke(self.callback, **ctx.params)
 
     def make_context(self, info_name, args, parent=None, **extra):
         for key, value in self.context_settings.items():
@@ -86,7 +86,7 @@ class AsyncMultiCommandMixin(AsyncCommandMixin):
     async def async_invoke(self, ctx):
         async def _process_result(value):
             if self.result_callback is not None:
-                value = await ctx.invoke(self.result_callback, value,
+                value = await ctx.async_invoke(self.result_callback, value,
                                          **ctx.params)
             return value
 

@@ -4,6 +4,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 import asyncio
 import inspect
 import logging
+import pprint
 from asyncio.events import AbstractEventLoop
 from collections import defaultdict
 from typing import List, Optional
@@ -177,6 +178,12 @@ class Bot:
 
     async def internal_exception_handler(self, exception):
         logger.error('Internal exception handled', exc_info=exception)
+
+        tb = exception.__traceback__
+        while tb.tb_next:
+            tb = tb.tb_next
+
+        logger.error(f'Locals: {pprint.pformat(tb.tb_frame.f_locals)}')
         return True
 
     async def run_event(self, func, event):

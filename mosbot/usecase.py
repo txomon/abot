@@ -3,8 +3,8 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
 import datetime
-import json
 import logging
+import time
 
 import aiopg.sa as asa
 import sqlalchemy as sa
@@ -30,13 +30,15 @@ async def save_history_songs():
 
     history_songs = {}
     found_last_song = False
+    played = time.time()
+    logger.info(f'Starting page retrieval until {last_song}')
     for page in range(1, 1000):
-        logger.info(f'Retrieving page {page}, so far {len(history_songs)} songs')
+        logger.debug(f'Retrieving page {page}, {len(history_songs)} songs, looking for {last_song} now at {played}')
         if found_last_song:
             break  # We want to do whole pages just in case...
         songs = await dws.get_history(page)
         for song in songs:
-            played = song['played']
+            played = song['played'] / 1000
             if played <= last_song:
                 found_last_song = True
             history_songs[played] = song
@@ -45,22 +47,24 @@ async def save_history_songs():
     tasks = {}
     # Logic here: [ ][ ][s][s][ ][s][ ]
     # Groups:     \-/\-/\-------/\----/
-    for song, in sorted(history_songs.items()):
-        song = json.loads(song)
+    logger.info('Saving data chunks in database')
+    for played, song in sorted(history_songs.items()):
         songs.append(song)
         if not song['skipped']:
-            tasks[song['played']] = asyncio.ensure_future(
+            tasks[played] = asyncio.ensure_future(
                 save_history_chunk(songs, await engine.acquire())
             )
             songs = []
 
+    logger.debug('Waiting for data to be saved')
     await asyncio.wait(tasks.values())
 
     last_successful_song = None
     for last_song, task in sorted(tasks.items()):
         if task.exception():
+            logger.error(f'Saving task failed at {last_song}')
             break
-        last_successful_song: datetime.datetime = last_song
+        last_successful_song = last_song
     if last_successful_song:
         logger.info(f'Successfully saved until {last_successful_song}')
         await save_bot_data(BotConfig.last_saved_history, last_successful_song)
@@ -166,16 +170,13 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                         'playback_id': previous_playback_id,
                         'action': db.Action.skip,
                     }, conn=conn)
+                    user_action_id = user_action['id']
                     if not user_action_id:
                         logger.error(
                             f'Error UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
                         await trans.rollback()
                         raise ValueError(
                             f'\tCollision UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
-                    user_action_id = user_action['id']
-                    logger.debug(f'UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
-                else:
-                    logger.debug(f'\tExists UserAction<skip>#{user_action_id} {previous_playback_id}({song_played})')
 
             # Query or create the User for the Playback entry
             dtid = song['userid']
@@ -216,9 +217,9 @@ async def save_history_chunk(songs, conn: asa.SAConnection):
                 'user_id': user_id,
                 'start': song_played,
             }
-            playback = await get_playback(playback_dict=entry)
+            playback = await get_playback(playback_dict=entry, conn=conn)
             if not playback:
-                playback = await save_playback(playback_dict=entry)
+                playback = await save_playback(playback_dict=entry, conn=conn)
                 if not playback:
                     logger.error(f'Error Playback#{playback_id} track:{track_id} user_id:{fkid} start:{song_played}')
                     await trans.rollback()

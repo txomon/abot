@@ -85,7 +85,11 @@ async def save_track(*, track_dict: dict, conn=None) -> Optional[dict]:
     )
     async with ensure_connection(conn) as conn:
         track = await (await conn.execute(query)).first()
-        return dict(track) if track else track
+        if not track:
+            return track
+        track = dict(track)
+        track.update(track_dict)
+        return track
 
 
 async def get_playback(*, playback_dict: dict, conn=None) -> Optional[dict]:
@@ -104,7 +108,7 @@ async def get_playback(*, playback_dict: dict, conn=None) -> Optional[dict]:
 
 
 async def save_playback(*, playback_dict: dict, conn=None) -> Optional[dict]:
-    assert {'track_id', 'start', 'user_id'} in set(playback_dict.keys())
+    assert {'track_id', 'start', 'user_id'} <= set(playback_dict.keys())
     query = psa.insert(Playback) \
         .values(playback_dict) \
         .on_conflict_do_update(
@@ -134,7 +138,7 @@ async def save_user_action(*, user_action_dict: dict, conn=None) -> Optional[dic
     query = psa.insert(UserAction) \
         .values(user_action_dict) \
         .on_conflict_do_update(
-        index_elements=[Playback.c.start],
+        index_elements=[UserAction.c.id],
         set_=user_action_dict
     )
     async with ensure_connection(conn) as conn:
@@ -243,7 +247,7 @@ async def query_simplified_user_actions(playback_id, *, conn=None) -> List[dict]
         db.UserAction.c.playback_id,
         sa.case([
             (db.UserAction.c.user_id.is_(None), db.UserAction.c.id),
-        ], else_=sa.true)
+        ], else_=0)
     ).alias()
 
     query = sa.select([
@@ -262,7 +266,7 @@ async def query_simplified_user_actions(playback_id, *, conn=None) -> List[dict]
                     (sa.and_(
                         db.UserAction.c.user_id.is_(None),
                         sub_query.c.user_id.is_(None)
-                    ), sa.true)
+                    ), sa.true())
                 ], else_=db.UserAction.c.user_id == sub_query.c.user_id)
             )
         )

@@ -13,7 +13,7 @@ import weakref
 from collections import defaultdict
 
 import aiohttp
-from yarl.__init__ import URL
+from yarl import URL
 
 from abot.bot import Backend, BotObject, Channel, Entity, Event, MessageEvent
 
@@ -21,6 +21,11 @@ logger = logging.getLogger('abot.dubtrack')
 logger_layer1 = logging.getLogger('abot.dubtrack.layer1')
 logger_layer2 = logging.getLogger('abot.dubtrack.layer2')
 logger_layer3 = logging.getLogger('abot.dubtrack.layer3')
+
+logger.setLevel(logging.INFO)
+logger_layer1.setLevel(logging.INFO)
+logger_layer2.setLevel(logging.INFO)
+logger_layer3.setLevel(logging.INFO)
 
 
 # Dubtrack specific objects
@@ -72,7 +77,7 @@ class DubtrackEntity(DubtrackObject, Entity):
 
     @property
     def id(self):
-        return self._data['id']
+        return self._data.get('id')
 
     @property
     def dubs(self):
@@ -150,21 +155,25 @@ class DubtrackMessage(DubtrackEvent, MessageEvent):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._dubtrack_backend._register_user(self._data['user'])
+        self._dubtrack_backend._register_user(self._data.get('user'))
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('username'))
 
     @property
     def text(self):
-        return self._data['message']
+        return self._data.get('message')
+
+    @property
+    def message_id(self):
+        return self._data.get('chatid')
 
     def __repr__(self):
         cls = self.__class__.__name__
-        chatid = self._data['chatid']
+        chatid = self.message_id
         sender = self.sender
-        msg = self._data["message"]
+        msg = self.text
         return f'<{cls}#{chatid} {sender} "{msg}">'
 
 
@@ -173,7 +182,7 @@ class DubtrackSkip(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('username'))
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -190,11 +199,15 @@ class DubtrackDelete(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('username'))
+
+    @property
+    def message_id(self):
+        return self._data.get('chatid')
 
     def __repr__(self):
         cls = self.__class__.__name__
-        chatid = self._data['chatid']
+        chatid = self.message_id
         sender = self.sender
         return f'<{cls}#{chatid} {sender}>'
 
@@ -208,31 +221,31 @@ class DubtrackDub(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('username'))
 
     @property
     def dubtype(self):
-        return self._data['dubtype']
+        return self._data.get('dubtype')
 
     @property
     def total_updubs(self):
-        return self._data['playlist']['updubs']
+        return self._data.get('playlist', {}).get('updubs')
 
     @property
     def total_downdubs(self):
-        return self._data['playlist']['downdubs']
-
-    @property
-    def song_length(self):
-        return self._data['playlist']['length']
+        return self._data.get('playlist', {}).get('downdubs')
 
     @property
     def length(self):
-        return datetime.timedelta(milliseconds=self._data['playlist']['songLength'])
+        song_length = self._data.get('playlist', {}).get('songLength')
+        if song_length:
+            return datetime.timedelta(milliseconds=song_length)
 
     @property
     def played(self):
-        return datetime.datetime.utcfromtimestamp(self._data['playlist']['played'] / 1000)
+        played = self._data.get('playlist', {}).get('played')
+        if played:
+            return datetime.datetime.utcfromtimestamp(played / 1000)
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -252,7 +265,7 @@ class DubtrackRoomQueueReorder(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('username'))
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -269,7 +282,7 @@ class DubtrackUserQueueUpdate(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('username'))
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -282,7 +295,7 @@ class DubtrackPlaying(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['song']['userid'])
+        return self._dubtrack_backend._get_entity(self._data.get('song', {}).get('userid'))
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -295,27 +308,35 @@ class DubtrackPlaying(DubtrackEvent):
 
     @property
     def song_type(self):
-        return self._data['songInfo']['type']
+        value = self._data.get('songInfo', {}).get('type')
+        return value
 
     @property
     def song_external_id(self):
-        return self._data['songInfo']['fkid']
+        value = self._data.get('songInfo', {}).get('fkid')
+        return value
 
     @property
     def song_name(self):
-        return self._data['songInfo']['name']
+        value = self._data.get('songInfo', {}).get('name')
+        return value
 
     @property
     def song_id(self):
-        return self._data['song']['songid']
+        value = self._data.get('songInfo', {}).get('songid')
+        return value
 
     @property
     def length(self):
-        return datetime.timedelta(milliseconds=self._data['songInfo']['songLength'])
+        value = self._data.get('songInfo', {}).get('songLength')
+        if value:
+            return datetime.timedelta(milliseconds=value)
 
     @property
     def played(self):
-        return datetime.datetime.utcfromtimestamp(self._data['song']['played'] / 1000)
+        value = self._data.get('songInfo', {}).get('songLength')
+        if value:
+            return datetime.datetime.utcfromtimestamp(value / 1000)
 
 
 class DubtrackJoin(DubtrackEvent):
@@ -327,7 +348,7 @@ class DubtrackJoin(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('username'))
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -344,7 +365,7 @@ class DubtrackUserPauseQueue(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('username'))
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -362,11 +383,11 @@ class DubtrackSetRole(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('username'))
 
     @property
     def receiver(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['modUser']['_id'])
+        return self._dubtrack_backend._get_entity(self._data.get('modUser', {}).get('_id'))
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -388,11 +409,11 @@ class DubtrackUnSetRole(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['username'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('username'))
 
     @property
     def receiver(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['modUser']['_id'])
+        return self._dubtrack_backend._get_entity(self._data.get('modUser', {}).get('_id'))
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -413,7 +434,7 @@ class DubtrackUserUpdate(DubtrackEvent):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return self._dubtrack_backend._get_entity(self._data['user']['userid'])
+        return self._dubtrack_backend._get_entity(self._data.get('user', {}).get('userid'))
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -465,7 +486,8 @@ class DubtrackBotBackend(Backend):
         room_info = self.dubtrackws.room_info
         self.dubtrack_channel = DubtrackChannel(room_info, self)
         active_song = await self.dubtrackws.get_active_song()
-        yield DubtrackPlaying(active_song, self)
+        if active_song:
+            yield DubtrackPlaying(active_song, self)
         async for data in self.dubtrackws.ws_api_consume():
             if data['type'].startswith('user_update'):
                 event = DubtrackUserUpdate(data, self)
@@ -476,6 +498,8 @@ class DubtrackBotBackend(Backend):
 
     # Internal data tracking methods
     def _register_user(self, user_data):
+        if not user_data:
+            return
         user_id = None
         update_dict = {}
         if 'userInfo' in user_data:  # From user only
@@ -584,12 +608,16 @@ class DubtrackWS:
 
     async def api_post(self, url, body):
         async with self.aio_session.post(url, json=body) as resp:
+            logger.debug(f'Request: {url} - {body}')
             response = await resp.json()
+            logger.debug(f'Response: {pprint.pformat(response)}')
         return response['data']
 
     async def api_get(self, url):
         async with self.aio_session.get(url) as resp:
+            logger.debug(f'Request: {url}')
             response = await resp.json()
+            logger.debug(f'Response: {pprint.pformat(response)}')
         return response['data']
 
     async def get_user_session_info(self):
@@ -907,8 +935,17 @@ class DubtrackWS:
         #               'type': 'youtube'},
         #  'startTime': 65}
 
+        # or if no one is playing
+
+        # {'err': {'details': {'code': 404,
+        #                      'message': 'no songs in active queue'},
+        #          'origin': 'method'}}
+
         room_id = await self.get_room_id()
-        return await self.api_get(f'https://api.dubtrack.fm/room/{room_id}/playlist/active')
+        playing_song = await self.api_get(f'https://api.dubtrack.fm/room/{room_id}/playlist/active')
+        if 'err' in playing_song:
+            return None
+        return playing_song
 
     async def get_users(self):
         # [
