@@ -284,7 +284,7 @@ async def ensure_dubtrack_playing(event: DubtrackPlaying, *, conn=None):
     user = await ensure_dubtrack_entity(event.sender)
     user_id = user['id']
     track_entry = {
-        'length': event.length,
+        'length': event.length.total_seconds(),
         'origin': getattr(Origin, event.song_type),
         'extid': event.song_external_id,
         'name': event.song_name,
@@ -294,7 +294,7 @@ async def ensure_dubtrack_playing(event: DubtrackPlaying, *, conn=None):
         track = await save_track(track_dict=track_entry, conn=conn)
         if not track:
             raise ValueError(f"Couldn't save track {track_entry}")
-    track_id = track
+    track_id = track['id']
 
     playback_entry = {
         'user_id': user_id,

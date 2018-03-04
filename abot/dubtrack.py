@@ -334,7 +334,7 @@ class DubtrackPlaying(DubtrackEvent):
 
     @property
     def played(self):
-        value = self._data.get('songInfo', {}).get('songLength')
+        value = self._data.get('song', {}).get('played')
         if value:
             return datetime.datetime.utcfromtimestamp(value / 1000)
 
@@ -607,7 +607,7 @@ class DubtrackWS:
         self.userpass = (username, password)
 
     async def api_post(self, url, body):
-        async with self.aio_session.post(url, json=body) as resp:
+        async with self.aio_session.post(url, body=body) as resp:
             logger.debug(f'Request: {url} - {body}')
             response = await resp.json()
             logger.debug(f'Response: {pprint.pformat(response)}')
@@ -1069,6 +1069,181 @@ class DubtrackWS:
         if page:
             url = url.with_query({'page': page})
         return await self.api_get(str(url))
+
+    async def get_room_playlist(self):
+        # {"__v": 0,
+        #  "created": 1520158007231,
+        #  "isActive": False,
+        #  "isPlayed": False,
+        #  "skipped": False,
+        #  "order": 999,
+        #  "roomid": "561b1e59c90a9c0e00df610b",
+        #  "songLength": 168000,
+        #  "updubs": 0,
+        #  "downdubs": 0,
+        #  "userid": "560b135c7ae1ea0300869b20",
+        #  "songid": "565e8fb8e39987830055f389",
+        #  "_user": "560b135c7ae1ea0300869b20",
+        #  "_song": "565e8fb8e39987830055f389",
+        #  "_id": "5a9bc537b55af20100405d6b"}
+        room_id = await self.get_room_id()
+        playlist = await self.api_get(f'https://api.dubtrack.fm/room/{room_id}/playlist')
+        return playlist
+
+    async def add_song_to_playlist(self, extid, origin='youtube'):
+        # {"__v": 0,
+        #  "created": 1520158645688,
+        #  "isActive": False,
+        #  "isPlayed": False,
+        #  "skipped": False,
+        #  "order": 999,
+        #  "roomid": "561b1e59c90a9c0e00df610b",
+        #  "songLength": 222000,
+        #  "updubs": 0,
+        #  "downdubs": 0,
+        #  "userid": "560b135c7ae1ea0300869b20",
+        #  "songid": "58b6a2126ba2fa18005f3a8e",
+        #  "_user": "560b135c7ae1ea0300869b20",
+        #  "_song": "58b6a2126ba2fa18005f3a8e",
+        #  "_id": "5a9bc7b58befc60100230823"}
+        room_id = await self.get_room_id()
+        response = self.api_post(f'https://api.dubtrack.fm/room/{room_id}/playlist',
+                                 {'songId': extid, 'songType': origin})
+        return response
+
+    async def get_room_playlist_details(self):
+        # [
+        #     {"_id": "5a9bc7ba9d993401003eba43",
+        #      "created": 1520158650527,
+        #      "isActive": False,
+        #      "isPlayed": False,
+        #      "skipped": False,
+        #      "order": 999,
+        #      "roomid": "561b1e59c90a9c0e00df610b",
+        #      "songLength": 309000,
+        #      "updubs": 0,
+        #      "downdubs": 0,
+        #      "userid": "560b135c7ae1ea0300869b20",
+        #      "songid": "5a9bc7ba9d993401003eba42",
+        #      "_user": {"_id": "560b135c7ae1ea0300869b20",
+        #                "username": "txomon",
+        #                "status": 1,
+        #                "roleid": 1,
+        #                "dubs": 0,
+        #                "created": 1443566427591,
+        #                "profileImage": {"public_id": "user/560b135c7ae1ea0300869b20",
+        #                                 "version": 1486657178,
+        #                                 "width": 245,
+        #                                 "height": 245,
+        #                                 "format": "gif",
+        #                                 "resource_type": "image",
+        #                                 "tags": [],
+        #                                 "pages": 22,
+        #                                 "bytes": 444903,
+        #                                 "type": "upload",
+        #                                 "etag": "09da0f0c34e6ddf6eb75516ea66e17bc",
+        #                                 "url":
+        #                                     "http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user"
+        #                                     "/560b135c7ae1ea0300869b20.gif",
+        #                                 "secure_url":
+        #                                     "https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user"
+        #                                     "/560b135c7ae1ea0300869b20.gif",
+        #                                 "overwritten": True},
+        #                "__v": 0},
+        #      "_song": {"_id": "5a9bc7ba9d993401003eba42",
+        #                "name": "Chu Ishikawa - Megatron (Clean Version)",
+        #                "images": {"thumbnail": "https://i.ytimg.com/vi/Nku49pPj0kU/hqdefault.jpg"},
+        #                "type": "youtube",
+        #                "songLength": 309000,
+        #                "fkid": "Nku49pPj0kU",
+        #                "__v": 0,
+        #                "created": "2018-03-04T10:17:30.329Z"},
+        #      "__v": 0}]
+        room_id = await self.get_room_id()
+        response = self.api_get(f'https://api.dubtrack.fm/room/{room_id}/playlist/details')
+        return response
+
+    async def delete_track_in_queue(self, user_id):
+        # {"userNextSong": {
+        #     "_id": "5a9bce0357faec01003e0c03",
+        #     "created": 1520160259582,
+        #     "isActive": False,
+        #     "isPlayed": False,
+        #     "skipped": False,
+        #     "order": 999,
+        #     "roomid": "561b1e59c90a9c0e00df610b",
+        #     "songLength": 246000,
+        #     "updubs": 0,
+        #     "downdubs": 0,
+        #     "userid": "560b135c7ae1ea0300869b20",
+        #     "songid": "560895658e9cb60300550def",
+        #     "_user": {
+        #         "_id": "560b135c7ae1ea0300869b20",
+        #         "username": "txomon",
+        #         "status": 1,
+        #         "roleid": 1,
+        #         "dubs": 0,
+        #         "created": 1443566427591,
+        #         "profileImage": {
+        #             "public_id": "user/560b135c7ae1ea0300869b20",
+        #             "version": 1486657178,
+        #             "width": 245,
+        #             "height": 245,
+        #             "format": "gif",
+        #             "resource_type": "image",
+        #             "tags": [],
+        #             "pages": 22,
+        #             "bytes": 444903,
+        #             "type": "upload",
+        #             "etag": "09da0f0c34e6ddf6eb75516ea66e17bc",
+        #             "url":
+        #                 "http://res.cloudinary.com/hhberclba/image/upload/v1486657178/user"
+        #                 "/560b135c7ae1ea0300869b20.gif",
+        #             "secure_url":
+        #                 "https://res.cloudinary.com/hhberclba/image/upload/v1486657178/user"
+        #                 "/560b135c7ae1ea0300869b20.gif",
+        #             "overwritten": True},
+        #         "__v": 0},
+        #     "_song": {
+        #         "_id": "560895658e9cb60300550def",
+        #         "name": "Back To The Future - The Power Of Love",
+        #         "images": {
+        #             "thumbnail": "https://i.ytimg.com/vi/-NMph943tsw/hqdefault.jpg",
+        #             "youtube": {"default": {
+        #                 "url": "https://i.ytimg.com/vi/-NMph943tsw/default.jpg",
+        #                 "width": 120,
+        #                 "height": 90},
+        #                 "medium": {
+        #                     "url": "https://i.ytimg.com/vi/-NMph943tsw/mqdefault.jpg",
+        #                     "width": 320,
+        #                     "height": 180},
+        #                 "high": {
+        #                     "url": "https://i.ytimg.com/vi/-NMph943tsw/hqdefault.jpg",
+        #                     "width": 480,
+        #                     "height": 360},
+        #                 "standard": {
+        #                     "url": "https://i.ytimg.com/vi/-NMph943tsw/sddefault.jpg",
+        #                     "width": 640,
+        #                     "height": 480}}},
+        #         "type": "youtube",
+        #         "fkid": "-NMph943tsw",
+        #         "streamUrl": None,
+        #         "songLength": 246000,
+        #         "__v": 0,
+        #         "created": "2015-09-28T01:18:29.979Z"},
+        #     "__v": 0}}
+
+        # or if no next song in user's queue
+
+        # {"userNextSong": None}
+
+        room_id = await self.get_room_id()
+        url = f'https://api.dubtrack.fm/room/{room_id}/queue/user/{user_id}'
+        async with self.aio_session.delete(url) as resp:
+            logger.debug(f'Request: {url}')
+            response = await resp.json()
+            logger.debug(f'Response: {pprint.pformat(response)}')
+        return response['data']
 
     async def raw_ws_consume(self):
         last_token_fail = last_consume_fail = 0

@@ -25,8 +25,6 @@ setup(
     keywords=['slack', 'dubtrack', 'bot', 'async'],
     entry_points={
         'console_scripts': [
-            'mos-bot=mosbot.main:mos_bot',
-            'mos-history=mosbot.command:mos_history',
             'bot=mosbot.__main__:main'
         ]
     }

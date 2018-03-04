@@ -3,6 +3,8 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
 import json
+import pprint
+import typing
 
 import click
 
@@ -11,9 +13,10 @@ import abot.dubtrack as dt
 from abot.bot import Bot
 from mosbot import config as mos_config
 from mosbot.db import BotConfig
-from mosbot.main import playing_handler, setup_logging, skip_handler
+from mosbot.handler import availability_handler, history_handler
 from mosbot.query import load_bot_data, save_bot_data
 from mosbot.usecase import save_history_songs
+from mosbot.utils import setup_logging
 
 
 class BotConfigValueType(click.ParamType):
@@ -82,6 +85,7 @@ def botcli():
 @botcli.command()
 def test():
     click.echo('TEST')
+    pprint.pprint(typing.get_type_hints(history_handler))
 
 
 @botcli.command()
@@ -94,8 +98,8 @@ def run(debug):
     dubtrack_backend.configure(username=mos_config.DUBTRACK_USERNAME, password=mos_config.DUBTRACK_PASSWORD)
     bot.attach_backend(backend=dubtrack_backend)
 
-    bot.add_event_handler(dt.DubtrackSkip, func=skip_handler)
-    bot.add_event_handler(dt.DubtrackPlaying, func=playing_handler)
+    bot.add_event_handler(func=history_handler)
+    bot.add_event_handler(func=availability_handler)
 
     # Run
     loop = asyncio.get_event_loop()

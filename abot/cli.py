@@ -11,7 +11,6 @@ import click.core
 import click.utils
 from click import *  # noqa
 
-from abot.bot import MessageEvent
 
 __all__ = click.__all__
 
@@ -158,7 +157,7 @@ class Group(AsyncGroupMixin, click.Group):
 
 
 class AsyncCommandCollection(AsyncMultiCommandMixin):
-    async def async_message(self, message: MessageEvent):
+    async def async_message(self, message: 'abot.bot.MessageEvent'):
         args = shlex.split(message.text)
         if not args:
             return

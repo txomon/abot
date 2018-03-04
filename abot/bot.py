@@ -5,8 +5,9 @@ import asyncio
 import inspect
 import logging
 import pprint
+import typing
 from asyncio.events import AbstractEventLoop
-from collections import defaultdict
+from collections import Iterable, defaultdict
 from typing import List, Optional
 
 from abot.cli import CommandCollection, Group
@@ -135,11 +136,19 @@ class Bot:
         cmd = CommandCollection(self.message_handlers)
         asyncio.ensure_future(await cmd.async_message(message))
 
-    def add_event_handler(self, event_class, *, func=None):
+    def add_event_handler(self, event_class=None, *, func=None):
+        if event_class and not isinstance(event_class, Iterable):
+            event_class = (event_class,)
+
         def wrapper(f):
-            assert asyncio.iscoroutinefunction(
-                func), f'Handler for {event_class} needs to be coroutine ({func})'
-            self.event_handlers[f].add(event_class)
+            nonlocal event_class
+            assert asyncio.iscoroutinefunction(func), \
+                f'Handler for {event_class} needs to be coroutine ({func})'
+            if event_class is None:
+                event_class = extract_possible_argument_types(func)
+
+            for ec in event_class:
+                self.event_handlers[f].add(ec)
             return f
 
         if func is None:
@@ -157,7 +166,6 @@ class Bot:
             for handler, handled_classes in self.event_handlers.items():
                 if cls not in handled_classes:
                     continue
-                logger.debug(f'Handling {event} with <{handler.__name__}>')
                 asyncio.ensure_future(self.run_event(handler, event))
                 runs += 1
         if not runs:
@@ -187,10 +195,13 @@ class Bot:
         return True
 
     async def run_event(self, func, event):
+        logger.debug(f'Starting handling {event} with <{func.__name__}>')
         try:
             await func(event)
         except Exception as exception:
             await self.handle_bot_exception(func, event, exception)
+        else:
+            logger.debug(f'Finished handling {event} with <{func.__name__}>')
 
     async def handle_bot_exception(self, func, event, exception):
         logger.exception(f'Failed running {event} in {func}')
@@ -198,3 +209,15 @@ class Bot:
 
     def start(self, event_loop: AbstractEventLoop = None):
         return asyncio.ensure_future(self.run_forever(), loop=event_loop)
+
+
+def extract_possible_argument_types(func) -> Iterable:
+    args = typing.get_type_hints(func)
+    if len(args) != 1:
+        raise AttributeError(f'Function {func} can only have one argument if using type hinting')
+    type_hint: typing.Union = next(iter(args.values()))
+    try:
+        isinstance(type_hint, typing.Union)
+    except TypeError:
+        return type_hint.__args__
+    return type_hint,

@@ -20,9 +20,11 @@ async def ensure_connection(conn):
     provided_connection = bool(conn)
     if not provided_connection:
         conn = await (await get_engine()).acquire()
-    yield conn
-    if not provided_connection:
-        await conn.close()
+    try:
+        yield conn
+    finally:
+        if not provided_connection:
+            await conn.close()
 
 
 async def get_user(*, user_dict: dict, conn=None) -> Optional[dict]:
@@ -183,7 +185,7 @@ async def load_bot_data(key, *, conn=None):
 
 async def get_last_playback(*, conn=None) -> dict:
     query = sa.select([db.Playback]) \
-        .order_by(sa.desc(db.Playback.c.played)) \
+        .order_by(sa.desc(db.Playback.c.start)) \
         .limit(1)
     async with ensure_connection(conn) as conn:
         result = await (await conn.execute(query)).first()
