@@ -35,8 +35,18 @@ jobs:
 
       - save_cache:
           paths:
-            - ./tox
+            - ./.tox
+          key: v1-dependencies-
+
+      - save_cache:
+          paths:
+            - ./.tox
           key: v1-dependencies-{{ checksum "Pipfile.lock" }}
+
+      - run:
+          name: submit coverage
+          command: |
+            coveralls
 
       - store_artifacts:
           path: test-reports
