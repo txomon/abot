@@ -1250,7 +1250,7 @@ class DubtrackWS:
         while True:  # two tries per level
             try:
                 token = await self.get_token()
-            except:
+            except Exception:
                 logger_layer1.exception('Trouble getting token')
                 now = time.time()
                 if last_token_fail + 15 > now:  # If the token has failed in the last 15 secs
@@ -1261,7 +1261,7 @@ class DubtrackWS:
                 try:
                     async for msg in self._raw_ws_consume(access_token=token):
                         yield msg
-                except:
+                except Exception:
                     logger_layer1.exception('Consumption has failed')
                     now = time.time()
                     if last_consume_fail + 15 > now:  # If consumption has failed in the last 15 secs

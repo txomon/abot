@@ -123,7 +123,7 @@ class Bot:
             try:
                 async for event in backend.consume():
                     yield event
-            except:
+            except BaseException:
                 logger.exception(f'Exception in {backend} handled. Trying to recover.')
 
     def attach_command_group(self, group: Group):
