@@ -26,7 +26,7 @@ jobs:
       - run:
           name: install dependencies
           command: |
-            pip install pipenv tox
+            sudo pip install pipenv tox
 
       - run:
           name: run tests
