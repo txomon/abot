@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "d436403bc8bcb7068cf33556802439643e1157728d7e7cdec6bfa8fd42efce72"
+            "sha256": "da2f67e0617dd9f705bbc9bff4cd3d187039ee1e6f7bbe24df703c3811858e41"
         },
         "host-environment-markers": {
             "implementation_name": "cpython",
@@ -84,9 +84,9 @@
         },
         "idna-ssl": {
             "hashes": [
-                "sha256:1227e44039bd31e02adaeafdbba61281596d623d222643fb021f87f2144ea147"
+                "sha256:1293f030bc608e9aa9cdee72aa93c1521bbb9c7698068c61c9ada6772162b979"
             ],
-            "version": "==1.0.0"
+            "version": "==1.0.1"
         },
         "multidict": {
             "hashes": [
@@ -365,10 +365,17 @@
         },
         "pytest": {
             "hashes": [
-                "sha256:8970e25181e15ab14ae895599a0a0e0ade7d1f1c4c8ca1072ce16f25526a184d",
-                "sha256:9ddcb879c8cc859d2540204b5399011f842e5e8823674bf429f70ada281b3cc6"
+                "sha256:062027955bccbc04d2fcd5d79690947e018ba31abe4c90b2c6721abec734261b",
+                "sha256:117bad36c1a787e1a8a659df35de53ba05f9f3398fb9e4ac17e80ad5903eb8c5"
             ],
-            "version": "==3.4.1"
+            "version": "==3.4.2"
+        },
+        "pytest-asyncio": {
+            "hashes": [
+                "sha256:286b50773e996c80d894b95afaf45df6952408a67a59979ca9839f94693ec7fd",
+                "sha256:f32804bb58a66e13a3eda11f8942a71b1b6a30466b0d2ffe9214787aab0e172e"
+            ],
+            "version": "==0.8.0"
         },
         "pytest-cov": {
             "hashes": [

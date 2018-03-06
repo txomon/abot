@@ -5,6 +5,7 @@ import asyncio
 import inspect
 import logging
 import pprint
+import re
 import typing
 from asyncio.events import AbstractEventLoop
 from collections import Iterable, defaultdict
@@ -32,11 +33,13 @@ class Backend:
     def is_mentioned(self, message_event: 'MessageEvent') -> Optional[str]:
         username = self.whoami().username
         text = message_event.text
-        if not username or text:
+        if not (username and text):
             return None
         if len(text) < 2:
             return None
-        if text.startswith(username) or text[1:].startswith(username):
+        pattern = r'^(@|!)?' + username + '(([,:]|\s)|$)'
+        logger.debug(f'Checking if `{text}` matches {pattern}')
+        if re.match(pattern, text):
             return username
         return None
 
@@ -70,16 +73,16 @@ class Channel(BotObject):
 
 
 class Entity(BotObject):
-    async def tell(self, text: str):
-        # Say something to the sender
-        raise NotImplementedError()
-
     @property
     def id(self) -> str:
         raise NotImplementedError()
 
     @property
     def username(self) -> str:
+        raise NotImplementedError()
+
+    async def tell(self, text: str):
+        # Say something to the sender
         raise NotImplementedError()
 
 
