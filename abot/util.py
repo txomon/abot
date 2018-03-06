@@ -3,7 +3,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
 from typing import AsyncIterator
-
+import logging
 
 async def iterator_merge(*iterators: AsyncIterator):
     iterators = {i: None for i in iterators}

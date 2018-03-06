@@ -29,11 +29,13 @@ def git_remote_commits():
 
 
 def git_get_closest_commit(valid_tags, remote_commits):
-    # Get git describe: `v0.0.1a1-6-gd44bfcd-dirty`
     git_log = subprocess.check_output('git log --format=%H'.split()).decode()
     common_commit = None
     common_to_current = None
+    current_commit = None
     for number, commit in enumerate(git_log.splitlines()):
+        if not current_commit:
+            current_commit = commit
         if not common_commit and commit in remote_commits:
             common_commit = commit
             common_to_current = number
@@ -41,7 +43,7 @@ def git_get_closest_commit(valid_tags, remote_commits):
             return {
                 'tag': valid_tags[commit],
                 'tag_to_current': number,
-                'commit': commit,
+                'commit': current_commit,
                 'common_commit': common_commit,
                 'common_to_current': common_to_current,
             }
@@ -88,7 +90,7 @@ def get_version():
         # Fourth, dirtiness flag
         is_dirty = bool(subprocess.check_output('git status -s'.split()).decode())
         if is_dirty:
-            status_string = '-dirty'
+            status_string = '.dirty'
 
         return f'{version_string}{dev_string}{local_string}{status_string}'
     except TypeError:
@@ -98,10 +100,9 @@ def get_version():
         return f'v{version}+unknown'
 
 
-
 setup(
     name='abot',
-    version='0.0.1a1',
+    version=get_version(),
     description='Bot creation library',
     long_description=open('README.rst').read(),
     url='https://github.com/txomon/abot',
