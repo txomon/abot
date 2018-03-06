@@ -73,7 +73,7 @@ workflows:
   version: 2
   build-distribute:
     jobs:
-      - build
+      - build:
           filters:
             tags:
               only: /.*/ # This is needed so that tags are also built when pushed
