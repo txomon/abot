@@ -186,8 +186,6 @@ def test_bot_attach_command_group(dummy_bot: Bot):
     dummy_bot.attach_command_group(main_group)
     assert main_group in dummy_bot.message_handlers
 
-def test_
-
 
 # Integration tests
 
