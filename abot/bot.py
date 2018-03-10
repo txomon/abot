@@ -9,12 +9,17 @@ import re
 import typing
 from asyncio.events import AbstractEventLoop
 from collections import Iterable, defaultdict
+from inspect import iscoroutinefunction
 from typing import List, Optional
 
 from abot.cli import CommandCollection, Group
 from abot.util import iterator_merge
 
 logger = logging.getLogger(__name__)
+
+
+class Abort(Exception):
+    pass
 
 
 class Backend:
@@ -114,6 +119,7 @@ class Bot:
         self.backends = {}
         self.event_handlers = defaultdict(set)
         self.message_handlers = set()
+        self.forever_loop: asyncio.Future = None
 
     def attach_backend(self, backend: Backend):
         if backend in self.backends:
@@ -126,7 +132,10 @@ class Bot:
             try:
                 async for event in backend.consume():
                     yield event
-            except BaseException:
+            except Abort as e:
+                logger.exception(f'Backend {backend} decided to abort bot execution')
+                raise e from None
+            except Exception:
                 logger.exception(f'Exception in {backend} handled. Trying to recover.')
 
     def attach_command_group(self, group: Group):
@@ -139,16 +148,22 @@ class Bot:
         cmd = CommandCollection(self.message_handlers)
         asyncio.ensure_future(await cmd.async_message(message))
 
-    def add_event_handler(self, event_class=None, *, func=None):
+    def add_event_handler(self, event_class_or_func=None, *, func=None):
+        if iscoroutinefunction(event_class_or_func):
+            func = event_class_or_func
+            event_class = None
+        else:
+            event_class = event_class_or_func
+
         if event_class and not isinstance(event_class, Iterable):
             event_class = (event_class,)
 
         def wrapper(f):
             nonlocal event_class
-            assert asyncio.iscoroutinefunction(func), \
-                f'Handler for {event_class} needs to be coroutine ({func})'
+            assert asyncio.iscoroutinefunction(f), \
+                f'Handler for {event_class} needs to be coroutine ({f})'
             if event_class is None:
-                event_class = extract_possible_argument_types(func)
+                event_class = extract_possible_argument_types(f)
 
             for ec in event_class:
                 self.event_handlers[f].add(ec)
@@ -174,18 +189,27 @@ class Bot:
         if not runs:
             logger.debug(f'No message handler for {event}')
 
-    async def run_forever(self):
+    async def _run_forever(self):
         continue_running = True
 
         for backend in self.backends:
             await backend.initialize()
 
+        backend_iterators = {i: None for i in self.backends.values()}
+
         while continue_running:
             try:
-                async for event in iterator_merge(*self.backends.values()):
+                async for event in iterator_merge(backend_iterators):
                     await self._handle_event(event=event)
+            except Abort as e:
+                logger.info(f'Execution aborted by {e}')
+                raise e from None
             except Exception as e:
                 continue_running = await self.internal_exception_handler(e)
+
+    async def run_forever(self):
+        self.forever_loop = self._run_forever()
+        return await self.forever_loop
 
     async def internal_exception_handler(self, exception):
         logger.error('Internal exception handled', exc_info=exception)
@@ -201,6 +225,9 @@ class Bot:
         logger.debug(f'Starting handling {event} with <{func.__name__}>')
         try:
             await func(event)
+        except Abort as exception:
+            self.forever_loop.set_exception(exception)
+            logger.exception(f'Handling {event} in <{func.__name__}> aborted, stopping run')
         except Exception as exception:
             await self.handle_bot_exception(func, event, exception)
         else:

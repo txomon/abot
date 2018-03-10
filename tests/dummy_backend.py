@@ -19,7 +19,10 @@ class DummyBackend(Backend):
 
     async def consume(self):
         for event in self.events:
-            yield event
+            if isinstance(event, BaseException):
+                raise event
+            else:
+                yield event
 
     def whoami(self):
         return self.me

@@ -1,12 +1,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, unicode_literals
 
+import asyncio
+import logging
 from typing import Union
 from unittest import mock
 
 import pytest
 
-from abot.bot import Backend, Bot, BotObject, Channel, Entity, Event, MessageEvent, extract_possible_argument_types
+from abot import cli
+from abot.bot import Abort, Backend, Bot, BotObject, Channel, Entity, Event, MessageEvent, \
+    extract_possible_argument_types
 from tests.dummy_backend import DummyBackend
 
 
@@ -152,12 +156,76 @@ def test_bot_creation():
     assert bot.message_handlers == set()
 
 
-def test_backend_attach(bot: Bot, dummy_backend: DummyBackend):
+def test_bot_attach_backend(bot: Bot, dummy_backend: DummyBackend):
     bot.attach_backend(dummy_backend)
     with pytest.raises(ValueError):
         bot.attach_backend(dummy_backend)
 
 
 @pytest.mark.asyncio
-async def test_backend_consume(dummy_bot: Bot, dummy_backend: DummyBackend):
-    pass
+async def test_bot_backend_consume(dummy_bot: Bot, dummy_backend: DummyBackend):
+    dummy_backend.events = ['a', 'b', 'c', Exception()]
+
+    events = []
+    with pytest.raises(Abort):
+        async for event in dummy_bot.backend_consume(dummy_backend):
+            events.append(event)
+            if len(events) == 4:
+                dummy_backend.events[3] = Abort()
+    assert events == ['a', 'b', 'c', 'a', 'b', 'c']
+
+
+def test_bot_attach_command_group(dummy_bot: Bot):
+    @cli.group()
+    async def main_group():
+        pass
+
+    dummy_bot.attach_command_group(main_group)
+    assert main_group in dummy_bot.message_handlers
+
+    dummy_bot.attach_command_group(main_group)
+    assert main_group in dummy_bot.message_handlers
+
+def test_
+
+
+# Integration tests
+
+@pytest.mark.asyncio
+async def test_bot_events(dummy_bot: Bot, dummy_backend: DummyBackend, caplog):
+    handler_calls = mock.MagicMock()
+    dummy_event = mock.MagicMock(spec=Event)
+
+    async def auto_reg_event_handler(event: Event):
+        handler_calls.auto_reg_event_handler(event)
+
+    dummy_bot.add_event_handler(func=auto_reg_event_handler)
+    assert len(dummy_bot.event_handlers) == 1
+
+    @dummy_bot.add_event_handler(Event)
+    async def event_handler(event):
+        handler_calls.event_handler(event)
+
+    assert len(dummy_bot.event_handlers) == 2
+
+    @dummy_bot.add_event_handler()
+    async def decorated_run_event_handler(event: Event):
+        handler_calls.decorated_event_handler(event)
+
+    assert len(dummy_bot.event_handlers) == 3
+
+    @dummy_bot.add_event_handler
+    async def decorated_event_handler(event: Event):
+        handler_calls.decorated_event_handler(event)
+
+    assert len(dummy_bot.event_handlers) == 4
+
+    dummy_backend.events = [dummy_event, Abort()]
+
+    caplog.set_level(logging.DEBUG, logger='asyncio')
+    asyncio.get_event_loop().set_debug(True)
+
+    with pytest.raises(Abort):
+        await dummy_bot._run_forever()
+
+    assert len(handler_calls.mock_calls) == 4, handler_calls.mock_calls
