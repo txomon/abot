@@ -6,7 +6,7 @@ import logging
 from typing import Union
 from unittest import mock
 
-import asynctest.mock as am
+import asynctest as am
 import pytest
 
 from abot import cli
@@ -21,6 +21,9 @@ def func_union_dict_list(b: Union[dict, list]): pass
 
 
 def func_dict(b: dict): pass
+
+
+def func_invalid(b: dict, c: list): pass
 
 
 async def async_handler_func(event): pass
@@ -58,9 +61,14 @@ def command_collection_mock(mocker):
 @pytest.mark.parametrize('func,outcome', [
     (func_union_dict_list, (dict, list)),
     (func_dict, (dict,)),
+    (func_invalid, AttributeError)
 ])
 def test_extract_possible_argument_types(func, outcome):
-    assert outcome == extract_possible_argument_types(func)
+    if outcome == AttributeError:
+        with pytest.raises(outcome):
+            assert outcome == extract_possible_argument_types(func)
+    else:
+        assert outcome == extract_possible_argument_types(func)
 
 
 @pytest.mark.asyncio
@@ -178,15 +186,17 @@ def test_bot_attach_backend(bot: Bot, dummy_backend: DummyBackend):
 
 @pytest.mark.asyncio
 async def test_bot_backend_consume(dummy_bot: Bot, dummy_backend: DummyBackend):
-    dummy_backend.events = ['a', 'b', 'c', Exception()]
+    dummy_backend.events = ['a', 'b', 'c']
 
     events = []
     with pytest.raises(Abort):
         async for event in dummy_bot.backend_consume(dummy_backend):
             events.append(event)
             if len(events) == 4:
+                dummy_backend.events.append(Exception())
+            if len(events) == 8:
                 dummy_backend.events[3] = Abort()
-    assert events == ['a', 'b', 'c', 'a', 'b', 'c']
+    assert events == ['a', 'b', 'c'] * 3
 
 
 def test_bot_attach_command_group(dummy_bot: Bot):
@@ -309,6 +319,46 @@ async def test_internal_exception_handler(dummy_bot: Bot):
         res = await dummy_bot.internal_exception_handler(e)
     assert res is True
 
+
+@pytest.mark.parametrize('returns', [
+    Abort(),
+    Exception(),
+    None,
+])
+@pytest.mark.asyncio
+async def test_bot_run_event(dummy_bot, returns):
+    func = am.CoroutineMock()
+    func.side_effect = returns
+    func.__name__ = 'func'
+    event = Event()
+    dummy_bot.forever_loop = am.MagicMock()
+    dummy_bot.handle_bot_exception = am.CoroutineMock()
+
+    await dummy_bot.run_event(func, event)
+
+    if isinstance(returns, Abort):
+        dummy_bot.forever_loop.set_exception.assert_called_once_with(returns)
+    elif isinstance(returns, Exception):
+        dummy_bot.handle_bot_exception.assert_awaited_once_with(func, event, returns)
+
+
+@pytest.mark.asyncio
+async def test_bot_handle_bot_exception(dummy_bot):
+    func = am.CoroutineMock()
+    event = Event()
+    try:
+        raise Exception()
+    except Exception as e:
+        await dummy_bot.handle_bot_exception(func, event, e)
+
+
+def test_bot_start(dummy_bot: Bot, asyncio_mock):
+    m = mock.MagicMock()
+    dummy_bot.run_forever = am.CoroutineMock()
+    dummy_bot.start(m)
+
+    asyncio_mock.ensure_future.assert_called_once()
+    dummy_bot.run_forever.assert_called_once_with()
 
 
 # Integration tests
