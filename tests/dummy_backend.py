@@ -3,7 +3,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 from unittest import mock
 
-from abot.bot import Backend
+from abot.bot import Backend, Event, MessageEvent
 
 
 class DummyBackend(Backend):
@@ -26,3 +26,13 @@ class DummyBackend(Backend):
 
     def whoami(self):
         return self.me
+
+
+class DummyEvent(Event):
+    pass
+
+
+class DummyMessageEvent(MessageEvent, DummyEvent):
+    @property
+    def text(self):
+        return ''

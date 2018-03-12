@@ -178,7 +178,7 @@ class AsyncCommandCollection(AsyncMultiCommandMixin):
                 click.echo('Aborted!', file=fd, color=False)
 
 
-class CommandCollection(AsyncMultiCommandMixin, click.CommandCollection):
+class CommandCollection(AsyncCommandCollection, click.CommandCollection):
     pass
 
 

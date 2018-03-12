@@ -146,7 +146,7 @@ class Bot:
         if not name:
             return
         cmd = CommandCollection(self.message_handlers)
-        asyncio.ensure_future(await cmd.async_message(message))
+        asyncio.ensure_future(cmd.async_message(message))
 
     def add_event_handler(self, event_class_or_func=None, *, func=None):
         if iscoroutinefunction(event_class_or_func):

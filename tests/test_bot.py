@@ -6,12 +6,13 @@ import logging
 from typing import Union
 from unittest import mock
 
+import asynctest.mock as am
 import pytest
 
 from abot import cli
 from abot.bot import Abort, Backend, Bot, BotObject, Channel, Entity, Event, MessageEvent, \
     extract_possible_argument_types
-from tests.dummy_backend import DummyBackend
+from tests.dummy_backend import DummyBackend, DummyEvent, DummyMessageEvent
 
 
 # Helper functions
@@ -20,6 +21,9 @@ def func_union_dict_list(b: Union[dict, list]): pass
 
 
 def func_dict(b: dict): pass
+
+
+async def async_handler_func(event): pass
 
 
 # Fixtures
@@ -37,6 +41,16 @@ def dummy_backend():
 def dummy_bot(bot, dummy_backend):
     bot.attach_backend(dummy_backend)
     return bot
+
+
+@pytest.fixture
+def asyncio_mock(mocker):
+    return mocker.patch('abot.bot.asyncio')
+
+
+@pytest.fixture
+def command_collection_mock(mocker):
+    return mocker.patch('abot.bot.CommandCollection')
 
 
 # Tests start
@@ -185,6 +199,116 @@ def test_bot_attach_command_group(dummy_bot: Bot):
 
     dummy_bot.attach_command_group(main_group)
     assert main_group in dummy_bot.message_handlers
+
+
+@pytest.mark.parametrize('is_mentioned', [True, False])
+@pytest.mark.asyncio
+async def test_bot_handle_message(
+        dummy_bot: Bot,
+        asyncio_mock: mock.MagicMock,
+        is_mentioned: bool,
+        command_collection_mock: mock.MagicMock):
+    m = mock.MagicMock(spec=MessageEvent)
+    m.backend.is_mentioned.return_value = is_mentioned
+    await dummy_bot._handle_message(m)
+    m.backend.is_mentioned.assert_called_once_with(m)
+    if not is_mentioned:
+        assert len(asyncio_mock.mock_calls) == 0
+    else:
+        command_collection_mock.assert_called_once_with(dummy_bot.message_handlers)
+        cmd = command_collection_mock.return_value
+        cmd.async_message.assert_called_once_with(m)
+        assert len(asyncio_mock.ensure_future.mock_calls) == 1
+
+
+def test_bot_add_event_handler(dummy_bot):
+    async def auto_reg_event_handler(event: Event):
+        pass
+
+    dummy_bot.add_event_handler(func=auto_reg_event_handler)
+    assert len(dummy_bot.event_handlers) == 1
+
+    @dummy_bot.add_event_handler(Event)
+    async def event_handler(event):
+        pass
+
+    assert len(dummy_bot.event_handlers) == 2
+
+    @dummy_bot.add_event_handler()
+    async def decorated_run_event_handler(event: Event):
+        pass
+
+    assert len(dummy_bot.event_handlers) == 3
+
+    @dummy_bot.add_event_handler
+    async def decorated_event_handler(event: Event):
+        pass
+
+    assert len(dummy_bot.event_handlers) == 4
+
+
+@pytest.mark.parametrize('event_class, listener_class', [
+    (DummyEvent, DummyEvent),
+    (DummyEvent, DummyMessageEvent),
+    (DummyMessageEvent, DummyEvent),
+    (DummyMessageEvent, DummyMessageEvent),
+])
+@pytest.mark.asyncio
+async def test_bot_handle_event(dummy_bot: Bot, event_class, listener_class, asyncio_mock):
+    dummy_bot._handle_message = am.CoroutineMock()
+    dummy_bot.run_event = am.CoroutineMock()
+
+    dummy_bot.add_event_handler(event_class_or_func=listener_class, func=async_handler_func)
+
+    event: Event = event_class()
+
+    await dummy_bot._handle_event(event)
+
+    if issubclass(event_class, MessageEvent):
+        dummy_bot._handle_message.assert_awaited_once_with(event)
+    if issubclass(listener_class, MessageEvent) and not issubclass(event_class, MessageEvent):
+        dummy_bot.run_event.assert_not_called()
+        dummy_bot.run_event.assert_not_awaited()
+    else:  # listener_class is Event
+        dummy_bot.run_event.assert_called_once_with(async_handler_func, event)
+        asyncio_mock.ensure_future.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_bot__run_forever(dummy_bot: Bot, dummy_backend: DummyBackend):
+    dummy_backend.initialize = am.CoroutineMock()
+    dummy_backend.events = [Event(), Event(), Abort()]
+    dummy_bot.internal_exception_handler = am.CoroutineMock(return_value=False)
+    e = Exception()
+    dummy_bot._handle_event = am.CoroutineMock(side_effect=[True, e])
+
+    await dummy_bot._run_forever()
+
+    dummy_backend.initialize.assert_called_once_with()
+    dummy_bot._handle_event.assert_awaited_once_with(event=dummy_backend.events[0])
+    dummy_bot.internal_exception_handler.assert_awaited_once_with(e)
+
+
+@pytest.mark.asyncio
+async def test_bot_run_forever(dummy_bot: Bot):
+    rf = dummy_bot._run_forever = am.CoroutineMock()
+
+    await dummy_bot.run_forever()
+
+    rf.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
+async def test_internal_exception_handler(dummy_bot: Bot):
+    def a():
+        raise Exception()
+
+    try:
+        a()
+    except Exception as e:
+        res = await dummy_bot.internal_exception_handler(e)
+    assert res is True
+
 
 
 # Integration tests
