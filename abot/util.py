@@ -3,12 +3,12 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
 import logging
-from typing import AsyncIterator, Dict
+from typing import AsyncIterator, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
 
-async def iterator_merge(iterators: Dict[AsyncIterator, asyncio.Future]):
+async def iterator_merge(iterators: Dict[AsyncIterator, Optional[asyncio.Future]]):
     while iterators:
         for iterator, value in list(iterators.items()):
             if not value:
