@@ -363,6 +363,7 @@ def test_bot_start(dummy_bot: Bot, asyncio_mock):
 
 # Integration tests
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_bot_events(dummy_bot: Bot, dummy_backend: DummyBackend, caplog):
     handler_calls = mock.MagicMock()
