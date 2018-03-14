@@ -4,6 +4,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 import asyncio
 import io
 import shlex
+from contextlib import contextmanager
 
 import click
 import click._unicodefun
@@ -14,11 +15,12 @@ from click import *  # noqa
 __all__ = click.__all__
 
 
+@contextmanager
 def stringio_wrapper(func):
     in_mem = io.StringIO()
     yield in_mem
     in_mem.seek(0)
-    func(in_mem)
+    func(in_mem.read())
 
 
 class Context(click.Context):
@@ -26,17 +28,7 @@ class Context(click.Context):
         self, callback = args[:2]
         ctx = self
 
-        if isinstance(callback, Command):
-            other_cmd = callback
-            callback = other_cmd.callback
-            ctx = Context(other_cmd, info_name=other_cmd.name, parent=self)
-            if callback is None:
-                raise TypeError('The given command does not have a '
-                                'callback that can be invoked.')
-
-            for param in other_cmd.params:
-                if param.name not in kwargs and param.expose_value:
-                    kwargs[param.name] = param.get_default(ctx)
+        # Deleted unused code from super class
 
         args = args[2:]
         with click.core.augment_usage_errors(self):
@@ -165,7 +157,6 @@ class AsyncCommandCollection(AsyncMultiCommandMixin):
             try:
                 with self.make_context(prog_name, args) as ctx:
                     await self.async_invoke(ctx)
-                    ctx.exit()
             except (EOFError, KeyboardInterrupt):
                 with stringio_wrapper(message.reply) as fd:
                     click.echo(file=fd, color=False)
@@ -178,7 +169,7 @@ class AsyncCommandCollection(AsyncMultiCommandMixin):
                 click.echo('Aborted!', file=fd, color=False)
 
 
-class CommandCollection(AsyncMultiCommandMixin, click.CommandCollection):
+class CommandCollection(AsyncCommandCollection, click.CommandCollection):
     pass
 
 

@@ -2,11 +2,13 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
-from typing import AsyncIterator
+import logging
+from typing import AsyncIterator, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
-async def iterator_merge(*iterators: AsyncIterator):
-    iterators = {i: None for i in iterators}
+async def iterator_merge(iterators: Dict[AsyncIterator, Optional[asyncio.Future]]):
     while iterators:
         for iterator, value in list(iterators.items()):
             if not value:
@@ -22,6 +24,7 @@ async def iterator_merge(*iterators: AsyncIterator):
                 # We remove the task from the list
                 for it, old_next in list(iterators.items()):
                     if task is old_next:
+                        logger.debug(f'Iterator {it} finished consuming')
                         iterators.pop(it)
             else:
                 # We remove the task from the key
