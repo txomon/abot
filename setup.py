@@ -121,4 +121,8 @@ setup(
     include_package_data=True,
     zip_safe=False,
     keywords=['slack', 'dubtrack', 'bot', 'async', 'asyncio'],
+    install_requires=[
+        'aiohttp',
+        'click',
+    ],
 )
