@@ -126,7 +126,7 @@ class DubtrackEvent(DubtrackObject, Event):
 
     @property
     def sender(self) -> DubtrackEntity:
-        return None
+        pass
 
     @property
     def channel(self) -> DubtrackChannel:
