@@ -21,16 +21,16 @@ pypi_upload: &pypi_upload
   command: pipenv run twine upload dist/*
 
 build_steps: &build_steps
-- checkout
+  - checkout
 
-# Download and cache dependencies
-- restore_cache:
-    keys:
-    - v1-tox
+  # Download and cache dependencies
+  - restore_cache:
+      keys:
+      - v1-tox
 
-- run: *install_test_deps
+  - run: *install_test_deps
 
-- run: *run_tox
+  - run: *run_tox
 
 # Save tox and venv cache
 - save_cache:
