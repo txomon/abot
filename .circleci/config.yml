@@ -23,21 +23,8 @@ pypi_upload: &pypi_upload
 placeholder:
   build_steps: &build_steps
   - checkout
-
-  # Download and cache dependencies
-  - restore_cache:
-      keys:
-      - v1-tox
-
   - run: *install_test_deps
-
   - run: *run_tox
-
-  # Save tox and venv cache
-  - save_cache:
-      paths:
-      - ./.tox
-      key: v1-tox
 
 version: 2
 jobs:
@@ -50,16 +37,8 @@ jobs:
     steps:
     # C&P from build_steps
     - checkout
-    - restore_cache:
-        keys:
-        - v1-tox
     - run: *install_test_deps
     - run: *run_tox
-    - save_cache:
-        paths:
-        - ./.tox
-        key: v1-tox
-
     # Extra step
     - persist_to_workspace:
         root: ~/repo
@@ -88,9 +67,6 @@ jobs:
     working_directory: ~/repo
     steps:
     - checkout
-    - restore_cache:
-        keys:
-        - v1-venv
     - run: *install_test_deps
     - attach_workspace:
         at: /tmp/dir
@@ -106,9 +82,6 @@ jobs:
     working_directory: ~/repo
     steps:
     - checkout
-    - restore_cache:
-        keys:
-        - v1-venv
     - run: *install_test_deps
     - run: *package
     - run: *pypi_upload
