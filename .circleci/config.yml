@@ -46,11 +46,12 @@ jobs:
       environment:
         TOXENV=py36
     working_directory: ~/repo
-    <<: *build_steps
-    - persist_to_workspace:
-        root: ~/repo
-        paths:
-        - .coverage
+    steps:
+      <<: *build_steps
+      - persist_to_workspace:
+          root: ~/repo
+          paths:
+          - .coverage
 
   test_37:
     docker:
@@ -58,7 +59,8 @@ jobs:
       environment:
         TOXENV=py37
     working_directory: ~/repo
-    <<: *build_steps
+    steps:
+      <<: *build_steps
 
   test_flake:
     docker:
@@ -66,7 +68,8 @@ jobs:
       environment:
         TOXENV=flake8
     working_directory: ~/repo
-    <<: *build_steps
+    steps:
+      <<: *build_steps
 
   submit_coverage:
     docker:
