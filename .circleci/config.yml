@@ -55,15 +55,23 @@ jobs:
     docker:
     - image: circleci/python:3.6
       environment:
-        TOXENV=py36,flake8
+        TOXENV=py36
     <<: *build_steps
 
   test_37:
     docker:
     - image: circleci/python:3.7
       environment:
-        TOXENV=py37,flake8
+        TOXENV=py37
     <<: *build_steps
+
+  test_flake:
+    docker:
+    - image: circleci/python:3.6
+      environment:
+        TOXENV=flake8
+    <<: *build_steps
+
 
   distribute:
     docker:
@@ -92,10 +100,16 @@ workflows:
           tags:
             only: /.*/ # This is needed so that tags are also built when pushed
 
+    - test_flake:
+        filters:
+          tags:
+            only: /.*/ # This is needed so that tags are also built when pushed
+
     - distribute:
         requires:
         - test_36
         - test_37
+        - test_flake
         filters:
           branches:
             only: master
