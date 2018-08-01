@@ -21,30 +21,22 @@ pypi_upload: &pypi_upload
   command: pipenv run twine upload dist/*
 
 build_steps: &build_steps
-  working_directory: ~/repo
+- checkout
 
-  steps:
-  - checkout
+# Download and cache dependencies
+- restore_cache:
+    keys:
+    - v1-tox
 
-  # Download and cache dependencies
-  - restore_cache:
-      keys:
-      - v1-tox
+- run: *install_test_deps
 
-  - run: *install_test_deps
+- run: *run_tox
 
-  - run: *run_tox
-
-  # Save tox and venv cache
-  - save_cache:
-      paths:
-      - ./.tox
-      key: v1-tox
-
-  - persist_to_workspace:
-      root: ~/repo
-      paths:
-      - .coverage
+# Save tox and venv cache
+- save_cache:
+    paths:
+    - ./.tox
+    key: v1-tox
 
 version: 2
 jobs:
@@ -53,13 +45,19 @@ jobs:
     - image: circleci/python:3.6
       environment:
         TOXENV=py36
+    working_directory: ~/repo
     <<: *build_steps
+    - persist_to_workspace:
+        root: ~/repo
+        paths:
+        - .coverage
 
   test_37:
     docker:
     - image: circleci/python:3.7
       environment:
         TOXENV=py37
+    working_directory: ~/repo
     <<: *build_steps
 
   test_flake:
@@ -67,6 +65,7 @@ jobs:
     - image: circleci/python:3.6
       environment:
         TOXENV=flake8
+    working_directory: ~/repo
     <<: *build_steps
 
   submit_coverage:
