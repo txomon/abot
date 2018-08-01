@@ -35,19 +35,16 @@ build_steps: &build_steps
 
   - run: *run_tox
 
-  - run: *submit_coverage
-
   # Save tox and venv cache
   - save_cache:
       paths:
       - ./.tox
       key: v1-tox
 
-  - store_test_results:
-      path: test-reports
-
-  - store_artifacts:
-      path: test-reports
+  - persist_to_workspace:
+      root: ~/repo
+      paths:
+      - .coverage
 
 version: 2
 jobs:
@@ -72,6 +69,23 @@ jobs:
         TOXENV=flake8
     <<: *build_steps
 
+  submit_coverage:
+    docker:
+    - image: circleci/python:3.7
+    working_directory: ~/repo
+    steps:
+    - checkout
+    - restore_cache:
+        keys:
+        - v1-venv
+    - run: *install_test_deps
+    - attach_workspace:
+        at: /tmp/dir
+    - run:
+        name: Copy coverage over
+        command: cp /tmp/dir/.coverage .
+    - run: *submit_coverage
+
 
   distribute:
     docker:
@@ -81,7 +95,7 @@ jobs:
     - checkout
     - restore_cache:
         keys:
-        - v1-venv-
+        - v1-venv
     - run: *install_test_deps
     - run: *package
     - run: *pypi_upload
@@ -104,6 +118,15 @@ workflows:
         filters:
           tags:
             only: /.*/ # This is needed so that tags are also built when pushed
+
+    - submit_coverage:
+        requires:
+        - test_36
+        - test_37
+        - test_flake
+        filters:
+          tags:
+            only: /.*/
 
     - distribute:
         requires:
