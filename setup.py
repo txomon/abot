@@ -50,10 +50,10 @@ def git_get_closest_commit(valid_tags, remote_commits):
 
 
 def get_version():
-    # Badass revision v1.2.9a1.dev40+20.ab31d12b-dirty
-    #                 ********######@@@@@@@@@@@@++++++
-    #          ----------/  ----/        /         \---
-    #         /            /            /              \
+    # Badass revision v1.2.9a1.post0.dev40+20.ab31d12b-dirty
+    #                 ********############@@@@@@@@@@@@++++++
+    #          ----------/  ----/         -----/        /
+    #         /            /             /             /
     # {version_string}{dev_string}{local_string}{status_string}
     try:
         dev_string = local_string = status_string = ''
@@ -81,7 +81,7 @@ def get_version():
 
         # Second, official non-public dev release string (.dev30) AKA dev_string
         if tag_to_common != 0:
-            dev_string = f'.post{tag_to_common}'
+            dev_string = f'.post0.dev{tag_to_common}'
 
         # Third, non-official non-public user release number (+29-ab38ecd99)
         if common_to_current:
