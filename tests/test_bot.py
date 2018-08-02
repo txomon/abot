@@ -2,12 +2,11 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
+import asynctest as am
 import logging
+import pytest
 from typing import Union
 from unittest import mock
-
-import asynctest as am
-import pytest
 
 from abot import cli
 from abot.bot import Abort, Backend, Bot, BotObject, Channel, Entity, Event, MessageEvent, \
@@ -295,7 +294,8 @@ async def test_bot__run_forever(dummy_bot: Bot, dummy_backend: DummyBackend):
     await dummy_bot._run_forever()
 
     dummy_backend.initialize.assert_called_once_with()
-    dummy_bot._handle_event.assert_awaited_once_with(event=dummy_backend.events[0])
+    assert dummy_bot._handle_event.mock_calls == [mock.call(event=dummy_backend.events[0]),
+                                                  mock.call(event=dummy_backend.events[1])]
     dummy_bot.internal_exception_handler.assert_awaited_once_with(e)
 
 
