@@ -81,7 +81,7 @@ def get_version():
 
         # Second, official non-public dev release string (.dev30) AKA dev_string
         if tag_to_common != 0:
-            dev_string = f'.dev{tag_to_common}'
+            dev_string = f'.post{tag_to_common}'
 
         # Third, non-official non-public user release number (+29-ab38ecd99)
         if common_to_current:
