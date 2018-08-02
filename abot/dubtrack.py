@@ -451,8 +451,8 @@ class DubtrackUserUpdate(DubtrackEvent):
 
 class DubtrackBotBackend(Backend):
     # Official Bot methods
-    def __init__(self):
-        self.dubtrackws = DubtrackWS()
+    def __init__(self, room):
+        self.dubtrackws = DubtrackWS(room)
         self.dubtrack_channel = None
         self.dubtrack_users = defaultdict(dict)  # ID: user_session_info
         self.dubtrack_entities = weakref.WeakValueDictionary()
@@ -578,7 +578,7 @@ class DubtrackWS:
     PONG = '3'
     DATA = '4'
 
-    def __init__(self, room='master-of-soundtrack'):
+    def __init__(self, room):
         self.room = room
         self.heartbeat = None
         self.ws_client_id = None
