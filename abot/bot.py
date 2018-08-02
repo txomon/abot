@@ -36,6 +36,8 @@ class Backend:
         raise NotImplementedError()
 
     def is_mentioned(self, message_event: 'MessageEvent') -> Optional[str]:
+        if not self.whoami():
+            return None
         username = self.whoami().username
         text = message_event.text
         if not (username and text):
