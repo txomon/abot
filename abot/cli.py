@@ -143,6 +143,14 @@ class AsyncMultiCommandMixin(AsyncCommandMixin):
                     rv.append(await sub_ctx.command.async_invoke(sub_ctx))
             return _process_result(rv)
 
+    def parse_args(self, ctx, args):
+        import abot.bot
+        if not args and self.no_args_is_help and not ctx.resilient_parsing:
+            event: abot.bot.MessageEvent = abot.bot.current_event.get()
+            tbd_tasks.append(event.reply(ctx.get_help()))
+            ctx.exit()
+        super().parse_args(ctx, args)
+
 
 class MultiCommand(AsyncMultiCommandMixin, click.MultiCommand):
     pass
