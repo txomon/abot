@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 aiohttp = "*"
 click = "*"
-asyncio-extras = "*"
 
 [dev-packages]
 pylint = "*"
