@@ -105,6 +105,7 @@ async def test_dubtrack_event():
 
     # Test channel can be set
     channel = event.channel = mock.MagicMock()
+    say = channel.say = am.CoroutineMock()
 
     # Test channel has been set
     assert event.channel == channel
@@ -114,7 +115,9 @@ async def test_dubtrack_event():
         event.channel = channel
 
     # Assert reply can be called
-    assert None is await event.reply('something', 'someone')
+    await event.reply('something', 'someone')
+    channel.say.assert_awaited_once_with('someone: something')
+    say.reset_mock()
 
     # Working __repr__
     assert repr(event)

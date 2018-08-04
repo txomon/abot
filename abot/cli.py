@@ -2,25 +2,27 @@
 from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
-import io
-import shlex
-from contextlib import contextmanager
-
 import click
 import click._unicodefun
 import click.core
 import click.utils
-from click import *  # noqa
+import io
+import logging
+import shlex
+from async_generator import asynccontextmanager
 
-__all__ = click.__all__
+logger = logging.getLogger(__name__)
+
+tbd_tasks = []
 
 
-@contextmanager
-def stringio_wrapper(func):
-    in_mem = io.StringIO()
-    yield in_mem
-    in_mem.seek(0)
-    func(in_mem.read())
+class ExitCode(Exception):
+    def __init__(self, code):
+        super().__init__()
+        self.code = code
+
+    def __repr__(self):
+        return f'ExitCode(code={code})'
 
 
 class Context(click.Context):
@@ -34,6 +36,9 @@ class Context(click.Context):
         with click.core.augment_usage_errors(self):
             with ctx:
                 return await callback(*args, **kwargs)
+
+    def exit(self, code=0):
+        raise ExitCode(code=code)
 
 
 class AsyncCommandMixin:
@@ -57,6 +62,24 @@ class AsyncCommandMixin:
         with ctx.scope(cleanup=False):
             self.parse_args(ctx, args)
         return ctx
+
+    def get_help_option(self, ctx):
+        """Returns the help option object."""
+        help_options = self.get_help_option_names(ctx)
+        if not help_options or not self.add_help_option:
+            return
+
+        def show_help(ctx, param, value):
+            import abot.bot
+            if value and not ctx.resilient_parsing:
+                event: abot.bot.MessageEvent = abot.bot.current_event.get()
+                tbd_tasks.append(event.reply(ctx.get_help()))
+                ctx.exit()
+
+        return click.core.Option(help_options, is_flag=True,
+                                 is_eager=True, expose_value=False,
+                                 callback=show_help,
+                                 help='Show this message and exit.')
 
 
 class Command(AsyncCommandMixin, click.Command):
@@ -156,17 +179,27 @@ class AsyncCommandCollection(AsyncMultiCommandMixin):
         try:
             try:
                 with self.make_context(prog_name, args) as ctx:
+                    for task in list(tbd_tasks):
+                        await task
+                        tbd_tasks.remove(task)
                     await self.async_invoke(ctx)
-            except (EOFError, KeyboardInterrupt):
-                with stringio_wrapper(message.reply) as fd:
-                    click.echo(file=fd, color=False)
-                raise click.Abort()
             except click.ClickException as e:
-                with stringio_wrapper(message.reply) as fd:
-                    e.show(file=fd)
-        except click.Abort:
-            with stringio_wrapper(message.reply) as fd:
-                click.echo('Aborted!', file=fd, color=False)
+                for task in list(tbd_tasks):
+                    await task
+                    tbd_tasks.remove(task)
+                await message.reply(e.format_message())
+            except click.Abort:
+                for task in list(tbd_tasks):
+                    await task
+                    tbd_tasks.remove(task)
+                await message.reply('Aborted!')
+        except ExitCode as e:
+            for task in list(tbd_tasks):
+                await task
+                tbd_tasks.remove(task)
+            logger.debug(f'Command exited {e}', exc_info=True)
+            if e.code:
+                message.reply('Exception happened, contact developers')
 
 
 class CommandCollection(AsyncCommandCollection, click.CommandCollection):

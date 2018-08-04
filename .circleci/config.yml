@@ -30,9 +30,9 @@ version: 2
 jobs:
   test_36:
     docker:
-    - image: circleci/python:3.6
+    - image: circleci/python:3.7
       environment:
-        TOXENV=py36
+        TOXENV=py37
     working_directory: ~/repo
     steps:
     # C&P from build_steps
@@ -45,17 +45,9 @@ jobs:
         paths:
         - .coverage
 
-  test_37:
-    docker:
-    - image: circleci/python:3.7
-      environment:
-        TOXENV=py37
-    working_directory: ~/repo
-    steps: *build_steps
-
   test_flake:
     docker:
-    - image: circleci/python:3.6
+    - image: circleci/python:3.7
       environment:
         TOXENV=flake8
     working_directory: ~/repo
@@ -90,11 +82,6 @@ workflows:
   version: 2
   build-distribute:
     jobs:
-    - test_36:
-        filters:
-          tags:
-            only: /.*/ # This is needed so that tags are also built when pushed
-
     - test_37:
         filters:
           tags:
