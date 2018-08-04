@@ -10,11 +10,12 @@ import logging
 import pprint
 import re
 import typing
-from abot.cli import CommandCollection, Group
-from abot.util import iterator_merge
 from asyncio.events import AbstractEventLoop
 from inspect import iscoroutinefunction
 from typing import List, Optional
+
+from abot.cli import CommandCollection, Group
+from abot.util import iterator_merge
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,9 @@ class _NoBackend(Backend):
     def whoami(self) -> Optional['Entity']:
         pass
 
+    def __bool__(self):
+        return False
+
 
 _no_backend = _NoBackend()
 
@@ -141,6 +145,9 @@ class _NoBotObject(BotObject):
         return current_bot.get(None)
 
     backend = _no_backend
+
+    def __bool__(self):
+        return False
 
 
 class _NoEntity(_NoBotObject, Entity):
@@ -216,6 +223,7 @@ class Bot:
         name = message.backend.is_mentioned(message)
         if not name:
             return
+        logger.info(f'Executing command: {message.text}')
         cmd = CommandCollection(sources=self.message_handlers)
         asyncio.ensure_future(cmd.async_message(message))
 
