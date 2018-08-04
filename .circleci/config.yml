@@ -28,7 +28,7 @@ placeholder:
 
 version: 2
 jobs:
-  test_36:
+  test_37:
     docker:
     - image: circleci/python:3.7
       environment:
@@ -94,7 +94,6 @@ workflows:
 
     - submit_coverage:
         requires:
-        - test_36
         - test_37
         - test_flake
         filters:
@@ -103,7 +102,6 @@ workflows:
 
     - distribute:
         requires:
-        - test_36
         - test_37
         - test_flake
         filters:
