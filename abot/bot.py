@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, unicode_literals
 
+from collections import Iterable, defaultdict
+
 import asyncio
+import contextvars
 import inspect
 import logging
 import pprint
 import re
 import typing
-from asyncio.events import AbstractEventLoop
-from collections import Iterable, defaultdict
-from inspect import iscoroutinefunction
-from typing import List, Optional
-
 from abot.cli import CommandCollection, Group
 from abot.util import iterator_merge
+from asyncio.events import AbstractEventLoop
+from inspect import iscoroutinefunction
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,73 @@ class MessageEvent(Event):
         raise NotImplementedError()
 
 
+class _NoBackend(Backend):
+    def configure(self, **config):
+        pass
+
+    async def initialize(self):
+        pass
+
+    async def consume(self):
+        pass
+
+    def whoami(self) -> Optional['Entity']:
+        pass
+
+
+_no_backend = _NoBackend()
+
+
+class _NoBotObject(BotObject):
+    @property
+    def bot(self):
+        return bot.get(None)
+
+    backend = _no_backend
+
+
+class _NoEntity(_NoBotObject, Entity):
+    id = ''
+    username = ''
+
+    async def tell(self, text: str):
+        print(text)
+
+
+_no_entity = _NoEntity()
+
+
+class _NoChannel(_NoBotObject, Channel):
+    entities = [_no_entity]
+
+    async def say(self, text: str):
+        print(text)
+
+
+_no_channel = _NoChannel()
+
+
+class _NoEvent(_NoBotObject, Event):
+    sender = _no_entity
+    channel = _no_channel
+
+    async def reply(self, text: str):
+        print(text)
+
+
+_no_event = _NoEvent()
+
+
+class _NoMessageEvent(_NoEvent, MessageEvent):
+    text = ''
+
+
+_no_message_event = _NoMessageEvent()
+
+current_event = contextvars.ContextVar('current_event', default=_no_message_event)
+current_bot = contextvars.ContextVar('current_bot')
+
+
 class Bot:
     def __init__(self):
         self.backends = {}
@@ -148,7 +216,7 @@ class Bot:
         name = message.backend.is_mentioned(message)
         if not name:
             return
-        cmd = CommandCollection(self.message_handlers)
+        cmd = CommandCollection(sources=self.message_handlers)
         asyncio.ensure_future(cmd.async_message(message))
 
     def add_event_handler(self, event_class_or_func=None, *, func=None):
@@ -203,7 +271,9 @@ class Bot:
         while continue_running:
             try:
                 async for event in iterator_merge(backend_iterators):
+                    ce_token = current_event.set(event)
                     await self._handle_event(event=event)
+                    current_event.reset(ce_token)
             except Abort as e:
                 logger.info(f'Execution aborted by {e}')
                 raise e from None

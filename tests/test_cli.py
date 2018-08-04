@@ -8,14 +8,6 @@ import pytest
 from abot import cli
 
 
-def test_stringio_wrapper():
-    m = mock.MagicMock()
-    with cli.stringio_wrapper(m) as fd:
-        fd.write('aaaa')
-
-    m.assert_called_once_with('aaaa')
-
-
 # Integration tests
 
 @pytest.mark.asyncio

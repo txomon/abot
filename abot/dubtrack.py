@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, print_function, unicode_literals
 
+import time
+from collections import defaultdict
+
+import aiohttp
 import asyncio
 import datetime
 import json
@@ -8,11 +12,7 @@ import logging
 import pprint
 import random
 import string
-import time
 import weakref
-from collections import defaultdict
-
-import aiohttp
 from yarl import URL
 
 from abot.bot import Backend, BotObject, Channel, Entity, Event, MessageEvent
@@ -22,10 +22,9 @@ logger_layer1 = logging.getLogger('abot.dubtrack.layer1')
 logger_layer2 = logging.getLogger('abot.dubtrack.layer2')
 logger_layer3 = logging.getLogger('abot.dubtrack.layer3')
 
-logger.setLevel(logging.INFO)
-logger_layer1.setLevel(logging.INFO)
-logger_layer2.setLevel(logging.INFO)
-logger_layer3.setLevel(logging.INFO)
+logger_layer1.propagate = False
+logger_layer2.propagate = False
+logger_layer3.propagate = False
 
 
 # Dubtrack specific objects
@@ -47,7 +46,9 @@ class DubtrackChannel(DubtrackObject, Channel):
     async def say(self, text: str):
         if not self._dubtrack_backend.dubtrack_id:
             raise ValueError('You need to login to speak')
-        await self._dubtrack_backend.dubtrackws.say_in_room(text)
+        for line in text.splitlines():
+            await self._dubtrack_backend.dubtrackws.say_in_room(line)
+            await asyncio.sleep(0.5)
 
     @property
     def entities(self):
@@ -142,8 +143,9 @@ class DubtrackEvent(DubtrackObject, Event):
         self._channel = channel
 
     async def reply(self, text: str, to: str = None):
-        # Reply to the message mentioning if possible
-        return
+        if to is None:
+            to = f'@{self.sender.username}'
+        return await self._channel.say(f'{to}: {text}')
 
     def __repr__(self):
         cls = self.__class__.__name__
@@ -607,7 +609,7 @@ class DubtrackWS:
         self.userpass = (username, password)
 
     async def api_post(self, url, body):
-        async with self.aio_session.post(url, body=body) as resp:
+        async with self.aio_session.post(url, json=body) as resp:
             logger.debug(f'Request: {url} - {body}')
             response = await resp.json()
             logger.debug(f'Response: {pprint.pformat(response)}')
@@ -760,7 +762,7 @@ class DubtrackWS:
         if not self.room_user_info:
             room_id = await self.get_room_id()
             self.room_user_info = await self.api_post(f'https://api.dubtrack.fm/room/{room_id}/users', None)
-        return self.room_user_info['user']['roleid']['type']
+        return self.room_user_info['user'].get('roleid', {}).get('type')
 
     async def say_in_room(self, text):
         # {"message": "pfff",
@@ -789,7 +791,7 @@ class DubtrackWS:
                 'user': self.user_session_info,
                 'userRole': await self.get_user_role(), }
         room_id = await self.get_room_id()
-        response = await self.aio_session.post(f'https://api.dubtrack.fm/chat/{room_id}', json=body)
+        response = await self.api_post(f'https://api.dubtrack.fm/chat/{room_id}', body)
         self.suppress_messages.append(text)
         return response
 

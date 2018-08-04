@@ -224,7 +224,7 @@ async def test_bot_handle_message(
     if not is_mentioned:
         assert len(asyncio_mock.mock_calls) == 0
     else:
-        command_collection_mock.assert_called_once_with(dummy_bot.message_handlers)
+        command_collection_mock.assert_called_once_with(sources=dummy_bot.message_handlers)
         cmd = command_collection_mock.return_value
         cmd.async_message.assert_called_once_with(m)
         assert len(asyncio_mock.ensure_future.mock_calls) == 1

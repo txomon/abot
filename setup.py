@@ -117,7 +117,7 @@ setup(
     ],
     packages=find_packages(exclude=['tests']),
     license='MIT',
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     include_package_data=True,
     zip_safe=False,
     keywords=['slack', 'dubtrack', 'bot', 'async', 'asyncio'],
