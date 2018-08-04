@@ -6,10 +6,8 @@ import click
 import click._unicodefun
 import click.core
 import click.utils
-import io
 import logging
 import shlex
-from async_generator import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +20,7 @@ class ExitCode(Exception):
         self.code = code
 
     def __repr__(self):
-        return f'ExitCode(code={code})'
+        return f'ExitCode(code={self.code})'
 
 
 class Context(click.Context):

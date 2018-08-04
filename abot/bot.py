@@ -138,7 +138,7 @@ _no_backend = _NoBackend()
 class _NoBotObject(BotObject):
     @property
     def bot(self):
-        return bot.get(None)
+        return current_bot.get(None)
 
     backend = _no_backend
 
@@ -281,7 +281,9 @@ class Bot:
                 continue_running = await self.internal_exception_handler(e)
 
     async def run_forever(self):
+        cbt = current_bot.set(self)
         self.forever_loop = self._run_forever()
+        current_bot.reset(cbt)
         return await self.forever_loop
 
     async def internal_exception_handler(self, exception):
