@@ -59,7 +59,7 @@ class BotObject:
     def bot(self) -> 'Bot':
         if hasattr(self, '_bot'):
             return self._bot
-        raise ValueError('Bot is not set in BotObject')
+        raise ValueError(f'Bot is not set in {self.__class__.__name__}')
 
     @bot.setter
     def bot(self, bot: 'Bot'):
