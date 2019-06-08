@@ -4,6 +4,7 @@ __pycache__/
 /dist/
 /build/
 /.pytest_cache/
+/.mypy_cache/
 /.tox/
 /.coverage
 /coverage.xml

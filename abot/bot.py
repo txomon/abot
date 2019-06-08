@@ -26,15 +26,41 @@ class Abort(Exception):
 
 class Backend:
     def configure(self, **config):
+        """Feed configuration to the Backend instance before initialization.
+
+        This method can be useful to pass usernames or passwords to the Backend
+        and store/handle them before the Bot initializates the Backend.
+        """
         raise NotImplementedError
 
     async def initialize(self):
+        """Execute one time operation which should run when the Backend starts."""
         raise NotImplementedError()
 
     async def consume(self):
+        """Execute Backend logic.
+
+        This method should be an async generator which yields Events, or any
+        Event subtype.
+        """
         raise NotImplementedError()
 
     def whoami(self) -> Optional['Entity']:
+        """Return whatever Entity identify the current Backend instance.
+
+        The Entity returned by this method will be used to identify the current
+        Backend and match incoming Events and MessageEvents to the current
+        Backend. Bear in mind that multiple Backends of the same type could be
+        running at the same time. Thus, this Entity should be unique for
+        each Backend instance.
+
+        The idea is to leave up to the Bot author to decide which Entity is
+        more convenient to identify the Backend.
+
+        E.g.: if the Backend is using a given username to authenticate against
+        Telegram, this method could return an Entity which represents this
+        username.
+        """
         raise NotImplementedError()
 
     def is_mentioned(self, message_event: 'MessageEvent') -> Optional[str]:
@@ -58,6 +84,7 @@ class BotObject:
     @property
     def bot(self) -> 'Bot':
         if hasattr(self, '_bot'):
+            self._bot: 'Bot'
             return self._bot
         raise ValueError(f'Bot is not set in {self.__class__.__name__}')
 
@@ -74,7 +101,7 @@ class BotObject:
 
 class Channel(BotObject):
     @property
-    async def entities(self) -> List['Entity']:
+    async def entities(self) -> List['Entity']:  # TODO: consider to remove async keyword
         raise NotImplementedError()
 
     async def say(self, text: str):
@@ -83,6 +110,7 @@ class Channel(BotObject):
 
 
 class Entity(BotObject):
+    """Anything that is not an Event or a Channel."""
     @property
     def id(self) -> str:
         raise NotImplementedError()
@@ -97,9 +125,19 @@ class Entity(BotObject):
 
 
 class Event(BotObject):
+    """A particular occurrence that happens in a Channel.
+
+    This occurrence may be related or not to a particular Entity which sends
+    the event through a given Channel.
+
+    E.g. of events:
+        - User has joined the chat room.
+        - User A sent a text message.
+        - Chat room name has changed.
+    """
     @property
-    def sender(self) -> Entity:
-        # Return the entity that sent this
+    def sender(self) -> Optional[Entity]:
+        # Return the entity that sent this, if any
         raise NotImplementedError()
 
     @property
@@ -144,6 +182,12 @@ class _NoBotObject(BotObject):
     def bot(self):
         return current_bot.get(None)
 
+    @bot.setter
+    def bot(self, bot: 'Bot'):
+        if hasattr(self, '_bot'):
+            raise ValueError(f'Bot {self._bot} is in place, cannot replace with {bot}')
+        self._bot = bot
+
     backend = _no_backend
 
     def __bool__(self):
@@ -162,7 +206,7 @@ _no_entity = _NoEntity()
 
 
 class _NoChannel(_NoBotObject, Channel):
-    entities = [_no_entity]
+    entities = [_no_entity]  # type: ignore
 
     async def say(self, text: str):
         print(text)
@@ -189,7 +233,7 @@ class _NoMessageEvent(_NoEvent, MessageEvent):
 _no_message_event = _NoMessageEvent()
 
 current_event = contextvars.ContextVar('current_event', default=_no_message_event)
-current_bot = contextvars.ContextVar('current_bot')
+current_bot: 'contextvars.ContextVar[Bot]' = contextvars.ContextVar('current_bot')
 
 
 class Bot:
@@ -205,7 +249,7 @@ class Bot:
         iterator = self.backend_consume(backend)
         self.backends[backend] = iterator
 
-    async def backend_consume(self, backend):
+    async def backend_consume(self, backend: 'Backend'):
         while True:
             try:
                 async for event in backend.consume():

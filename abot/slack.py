@@ -4,7 +4,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 import asyncio
 import json
 import logging
-from typing import List
+from typing import List, Union
 
 import aiohttp
 from aiohttp import WSMsgType
@@ -148,10 +148,11 @@ class SlackAPI:
         self.ws_ids += 1
         logger.debug(f'Sending {body}')
         self.ws_socket.send_json(body)
+        future: asyncio.Future
         future = self.response_futures[body['id']] = asyncio.Future()
         return future
 
-    async def write_to(self, recipients: List[str] or str, message: str):
+    async def write_to(self, recipients: Union[List[str], str], message: str):
         if not isinstance(recipients, str) and len(recipients) > 1:
             recipients_ids = await asyncio.gather(
                 self.slack_name_to_id(recipient=recipient) for recipient in recipients

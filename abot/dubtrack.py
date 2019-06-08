@@ -3,6 +3,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import time
 from collections import defaultdict
+from typing import Optional
 
 import aiohttp
 import asyncio
@@ -133,6 +134,7 @@ class DubtrackEvent(DubtrackObject, Event):
     def channel(self) -> DubtrackChannel:
         # Return the channel used to send the Event
         if hasattr(self, '_channel'):
+            self._channel: DubtrackChannel
             return self._channel
         raise ValueError('Channel is not set')
 
@@ -563,9 +565,10 @@ class DubtrackBotBackend(Backend):
         self.dubtrack_entities[user_id] = entity
         return entity
 
-    def whoami(self) -> DubtrackEntity:
+    def whoami(self) -> Optional[DubtrackEntity]:
         if self.dubtrack_id:
             return self._get_entity(self.dubtrack_id)
+        return None
 
 
 # Dubtrack dirty binding

@@ -3,11 +3,16 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import asyncio
 import click
-import click._unicodefun
+import click._unicodefun  # type: ignore
 import click.core
 import click.utils
 import logging
 import shlex
+
+# Allow type checking for circular dependencies
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    import abot
 
 logger = logging.getLogger(__name__)
 
