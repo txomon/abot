@@ -47,7 +47,7 @@ class Backend:
             return None
         if len(text) < 2:
             return None
-        pattern = r'^(@|!)?' + username + '(([,:]|\s)|$)'
+        pattern = r'^(@|!)?' + username + r'(([,:]|\s)|$)'
         logger.debug(f'Checking if `{text}` matches {pattern}')
         if re.match(pattern, text):
             return username
@@ -219,7 +219,7 @@ class Bot:
     def attach_command_group(self, group: Group):
         self.message_handlers.add(group)
 
-    async def _handle_message(self, message):
+    async def _handle_message(self, message: MessageEvent):
         name = message.backend.is_mentioned(message)
         if not name:
             return
