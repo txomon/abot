@@ -14,7 +14,7 @@ async def iterator_merge(iterators: Dict[AsyncIterator, Optional[asyncio.Future]
             if not value:
                 iterators[iterator] = asyncio.ensure_future(iterator.__anext__())
 
-        tasks, _ = await asyncio.wait(iterators.values(), return_when=asyncio.FIRST_COMPLETED)
+        tasks, _ = await asyncio.wait(iterators.values(), return_when=asyncio.FIRST_COMPLETED)  # type: ignore
         for task in tasks:
             # We send the result up
             try:
